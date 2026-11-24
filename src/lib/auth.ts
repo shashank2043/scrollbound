@@ -26,6 +26,13 @@ const baseURL = getAuthBaseURL();
 const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
 
+// If explicitly provided via GOOGLE_REDIRECT_URI or derived from BETTER_AUTH_URL
+const googleRedirectURI =
+  process.env.GOOGLE_REDIRECT_URI ||
+  (process.env.BETTER_AUTH_URL && !process.env.BETTER_AUTH_URL.includes('localhost')
+    ? `${process.env.BETTER_AUTH_URL.replace(/\/$/, '')}/api/auth/callback/google`
+    : undefined);
+
 export const isGoogleAuthEnabled = Boolean(googleClientId && googleClientSecret);
 
 export const auth = betterAuth({
@@ -80,6 +87,7 @@ export const auth = betterAuth({
       clientId: googleClientId || 'NOT_CONFIGURED',
       clientSecret: googleClientSecret || 'NOT_CONFIGURED',
       enabled: isGoogleAuthEnabled,
+      ...(googleRedirectURI ? { redirectURI: googleRedirectURI } : {}),
     },
   },
   user: {
