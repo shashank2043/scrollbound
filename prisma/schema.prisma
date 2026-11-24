@@ -1,0 +1,109 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  name         String?
+  passwordHash String
+  settings     Json?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  books        Book[]
+  bookmarks    Bookmark[]
+  progresses   Progress[]
+  customThemes CustomTheme[]
+
+  @@map("users")
+}
+
+model Book {
+  id         String     @id
+  userId     String
+  title      String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  lastReadAt DateTime?
+  blockCount Int        @default(0)
+  chunkCount Int        @default(0)
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chunks     Chunk[]
+  bookmarks  Bookmark[]
+  progress   Progress[]
+
+  @@index([userId])
+  @@map("books")
+}
+
+model Chunk {
+  id     String @id // `${bookId}:${index}`
+  bookId String
+  index  Int
+  blocks Json
+
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, index])
+  @@index([bookId])
+  @@map("chunks")
+}
+
+model Progress {
+  id        String   @id @default(uuid())
+  bookId    String
+  userId    String
+  blockId   Int
+  offset    Float
+  percent   Float
+  updatedAt DateTime @default(now())
+
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@index([bookId])
+  @@index([userId])
+  @@map("progress")
+}
+
+model Bookmark {
+  id        String   @id
+  bookId    String
+  userId    String
+  blockId   Int
+  snippet   String
+  note      String?
+  createdAt DateTime @default(now())
+
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([bookId])
+  @@index([userId])
+  @@map("bookmarks")
+}
+
+model CustomTheme {
+  id        String   @id
+  userId    String
+  name      String
+  bg        String
+  text      String
+  accent    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("custom_themes")
+}

@@ -1,23 +1,122 @@
 # Scrollbound 📜
 
-**Scrollbound** is a personal, single-user novel reader for the browser. Upload any PDF novel, and Scrollbound extracts the text and reflows it into clean, responsive, distraction-free typography for any screen size—from mobile phones to ultrawide displays.
+**Scrollbound** is a personal novel reader for the browser, powered by Next.js (App Router), TypeScript, Tailwind CSS, `pdfjs-dist`, and a local **PostgreSQL** database managed via **Prisma ORM**.
 
-Built with Next.js (App Router), TypeScript, Tailwind CSS, `pdfjs-dist`, and `idb`.
+Upload any PDF novel, and Scrollbound extracts the text in memory, reflows it into clean, responsive typography for any screen size, and persists all books, reading progress, bookmarks, and user settings to PostgreSQL.
 
 ---
 
 ## Key Highlights
 
-- **100% Client-Side & Zero Backend**: No backend, no database, no auth, and no cloud dependencies. Everything runs locally in your browser.
-- **Privacy First (PDFs Never Stored)**: The original PDF is read into memory, parsed page-by-page into clean text blocks, and then immediately discarded. The raw PDF file is **never** saved to IndexedDB, localStorage, or your filesystem.
+- **PostgreSQL Database Storage**: All novel chunks, reading positions, bookmarks, custom themes, and user settings are persisted to a PostgreSQL database (`postgresql://postgres:postgres@localhost:5432/scrollbound`).
+- **User Authentication**: Account creation and login with secure bcrypt password hashing and HTTP-only JWT session cookies.
+- **Privacy First (PDFs Never Stored)**: The original PDF is read into memory, parsed page-by-page into clean text blocks, and then immediately discarded. The raw PDF file is **never** saved to PostgreSQL or the filesystem.
 - **High Performance & Large Novels**: Efficiently handles 1000+ page novels without freezing the UI by processing page-by-page and yielding to the main thread.
-- **Chunked Storage & Infinite Lazy Loading**: Stored in IndexedDB in 200-block chunks. Loads lazily as you scroll, rendering novels with 100k+ words with zero lag.
+- **Chunked Storage & Infinite Lazy Loading**: Stored in PostgreSQL in 200-block records (`Chunk`). Loads lazily as you scroll, rendering novels with 100k+ words with zero lag.
 - **Exact Position Tracking**: Tracks position by `{ blockId, offsetWithinBlock }` of the topmost paragraph in view. Resumes at the exact reading spot across restarts, screen resizing, or font size changes.
 - **Collapsible Floating Toolbar**: Hides automatically while scrolling down to keep reading immersive; smoothly appears when scrolling up.
 - **Bookmarks & Annotations**: Tap or click any paragraph to bookmark it, add custom notes, and jump directly back to that paragraph anytime via the bookmarks drawer.
-- **Custom Theming & Typography**: Built-in Light, Dark, and Sepia presets, plus a custom theme creator with live WCAG contrast checking. Adjustable font size (14–32px), font family (Serif, Sans, Dyslexia-friendly, Mono), line height, and content width.
+- **Custom Theming & Typography**: Built-in Light, Dark, and Sepia presets, plus a custom theme creator with live WCAG contrast checking. Adjustable font size (14–32px), font family (Serif, Sans, **Poppins**, Dyslexia-friendly, Mono), line height, and content width.
 - **Append PDFs**: Add sequels or next volumes to an existing book while keeping previous reading progress and bookmarks intact.
-- **Full JSON Backup & Storage Persistence**: Export and import your entire library with a single click, and request browser persistent storage (`navigator.storage.persist()`).
+- **Full JSON Backup**: Export and import your library with a single click.
+
+---
+
+## Database Configuration & Supabase Deployment
+
+Scrollbound uses **Prisma ORM** with **PostgreSQL**. It supports local PostgreSQL as well as cloud-hosted databases such as **Supabase** with connection pooling.
+
+### Supabase + Vercel Architecture
+
+In a serverless environment like Vercel, serverless functions can quickly exhaust standard PostgreSQL connection limits. Supabase provides two connection URLs:
+
+1. **`DATABASE_URL` (Transaction Connection Pooler - Port 6543)**:
+   - Uses Supabase's Supavisor / PgBouncer pooler.
+   - Appending `?pgbouncer=true` tells Prisma Client to operate without prepared statement conflicts in pooled mode.
+   - Used by the Next.js runtime when executing queries.
+
+2. **`DIRECT_URL` (Direct Connection - Port 5432)**:
+   - Direct connection to PostgreSQL.
+   - Used exclusively by the Prisma CLI for schema migrations and `prisma db push` (connection poolers in transaction mode block DDL migrations).
+
+---
+
+## Step-by-Step Deployment Guide (Supabase + Vercel)
+
+### 1. Set Up Supabase Database
+
+1. Create a free account at [Supabase](https://supabase.com) and create a new project.
+2. Once the project is provisioned, go to **Project Settings** (gear icon) -> **Database**.
+3. Scroll down to **Connection string** and select the **URI** tab:
+   - Under **Mode**, select **Transaction** (port `6543`). Copy this URI. Replace `[YOUR-PASSWORD]` with your database password. Add `?pgbouncer=true` to the end if not present. This is your `DATABASE_URL`.
+   - Under **Mode**, select **Session** or **Direct** (port `5432`). Copy this URI. Replace `[YOUR-PASSWORD]` with your database password. This is your `DIRECT_URL`.
+
+### 2. Push Schema to Supabase
+
+Before deploying, push the Prisma schema to your Supabase instance from your terminal:
+
+```bash
+# Set your Supabase connection strings in your terminal or in .env:
+DATABASE_URL="postgresql://postgres.[YOUR-PROJECT-REF]:[YOUR-PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?pgbouncer=true"
+DIRECT_URL="postgresql://postgres.[YOUR-PROJECT-REF]:[YOUR-PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres"
+
+# Push schema directly to Supabase
+pnpm db:push
+# or: npx prisma db push
+```
+
+This creates the `users`, `books`, `chunks`, `progress`, `bookmarks`, and `custom_themes` tables with all required foreign keys and cascade rules.
+
+### 3. Deploy to Vercel
+
+1. Push your repository to GitHub, GitLab, or Bitbucket.
+2. Log in to [Vercel](https://vercel.com) and click **"Add New..."** -> **"Project"**.
+3. Import your `scrollbound` repository.
+4. In the **Configure Project** screen, open **Environment Variables** and add:
+   - `DATABASE_URL`: Your Supabase transaction pooler URI (port `6543`, with `?pgbouncer=true`)
+   - `DIRECT_URL`: Your Supabase direct connection URI (port `5432`)
+   - `JWT_SECRET`: A secure random 32+ character string (e.g. run `openssl rand -base64 32`)
+5. Click **Deploy**.
+
+Vercel will run `prisma generate && next build` automatically during the build step and deploy your personal novel reader to the edge!
+
+---
+
+## Local Development
+
+- **users**: `id`, `email`, `name`, `passwordHash`, `settings` (JSON), `createdAt`, `updatedAt`
+- **books**: `id`, `userId`, `title`, `blockCount`, `chunkCount`, `lastReadAt`, `createdAt`, `updatedAt`
+- **chunks**: `id` (`${bookId}:${index}`), `bookId`, `index`, `blocks` (JSON array of text blocks)
+- **progress**: `id`, `userId`, `bookId`, `blockId`, `offset`, `percent`, `updatedAt`
+- **bookmarks**: `id`, `userId`, `bookId`, `blockId`, `snippet`, `note`, `createdAt`
+- **custom_themes**: `id`, `userId`, `name`, `bg`, `text`, `accent`, `createdAt`
+
+---
+
+## Getting Started
+
+### 1. Prerequisites
+- Node.js 18+ (tested with Node.js 24)
+- PostgreSQL running locally on port 5432 (default user: `postgres`, password: `postgres`)
+- `pnpm` (or `npm`)
+
+### 2. Database Sync
+Push the schema to PostgreSQL:
+```bash
+pnpm exec prisma db push
+```
+
+### 3. Run Development Server
+```bash
+pnpm dev
+```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### 4. Build for Production
+```bash
+pnpm build
+pnpm start
+```
 
 ---
 
@@ -52,78 +151,7 @@ PDF files store positioned visual glyphs and fragmented text runs rather than st
 
 6. **Heading Detection**:
    - Short lines matching explicit patterns (`Chapter N`, `Prologue`, `Book II`, `ACT 1`, etc.), all-caps titles, or lines with distinctively larger font sizes are tagged as `heading` blocks; body paragraphs are tagged as `paragraph` blocks.
-   - Stored with sequential, immutable integer IDs (`0, 1, 2, ...`) and split into 200-block records in IndexedDB.
-
----
-
-## Getting Started
-
-### Prerequisites
-- Node.js 18+ (tested with Node.js 24)
-- `pnpm` (or `npm`)
-
-### Installation & Run
-
-1. **Install dependencies**:
-   ```bash
-   pnpm install
-   ```
-
-2. **Start development server**:
-   ```bash
-   pnpm dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-3. **Build for production**:
-   ```bash
-   pnpm build
-   pnpm start
-   ```
-
-4. **Run linter**:
-   ```bash
-   pnpm lint
-   ```
-
----
-
-## Project Structure
-
-```
-scrollbound/
-├── public/
-│   └── pdf.worker.min.mjs          # PDF.js worker served statically
-├── src/
-│   ├── app/
-│   │   ├── (library)/page.tsx      # Library view (home page)
-│   │   ├── read/[bookId]/page.tsx  # Reader view
-│   │   ├── globals.css             # Tailwind & CSS variable themes
-│   │   └── layout.tsx              # Root layout & anti-flash theme bootstrap
-│   ├── components/
-│   │   ├── AddBookModal.tsx        # PDF file picker, title prompt, progress
-│   │   ├── AppendBookModal.tsx     # Append PDF to existing book
-│   │   ├── BackupModal.tsx         # JSON export/import & persistent storage
-│   │   ├── BookCard.tsx            # Library book card with % progress & menu
-│   │   ├── BookmarksDrawer.tsx     # Bookmarks slideover with note editing
-│   │   ├── DeleteConfirmModal.tsx  # Delete confirmation dialog
-│   │   ├── LibraryHeader.tsx       # Library navigation header
-│   │   ├── ReaderContent.tsx       # Lazy-loaded chunk reader with position tracker
-│   │   ├── ReaderToolbar.tsx       # Auto-hiding floating toolbar & progress bar
-│   │   ├── SettingsModal.tsx       # Typography & appearance modal
-│   │   └── ThemePicker.tsx         # Preset & custom themes with WCAG contrast check
-│   ├── hooks/
-│   │   ├── useProgress.ts          # Debounced reading position save & restore
-│   │   └── useSettings.ts          # Appearance state & CSS variable injector
-│   └── lib/
-│       ├── db.ts                   # IndexedDB storage layer (idb)
-│       ├── theme.ts                # Themes, fonts & WCAG contrast calculation
-│       ├── types.ts                # TypeScript data models
-│       └── pdf/
-│           ├── cleanup.ts          # Line grouping, header filtering & paragraph reflow
-│           └── extract.ts          # PDF.js document loader & page iterator
-└── package.json
-```
+   - Stored in PostgreSQL in 200-block records (`Chunk`) with JSON arrays of blocks.
 
 ---
 

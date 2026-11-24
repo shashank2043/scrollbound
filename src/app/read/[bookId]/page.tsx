@@ -69,6 +69,7 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
     percent,
     isRestored,
     updatePosition,
+    flushProgress,
   } = useProgress(bookId, book?.blockCount ?? 0);
 
   // Bookmark actions
@@ -147,6 +148,7 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
         bookmarkCount={bookmarks.length}
         onOpenBookmarks={() => setIsBookmarksOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onLeave={flushProgress}
       />
 
       {/* Main Virtualized / Lazy Scroll Reader */}

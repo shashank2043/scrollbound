@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Book, Progress } from '../lib/types';
 import { getAllBooks, getAllProgress, deleteBook, saveBook, createChunksFromBlocks } from '../lib/db';
 import { useSettings } from '../hooks/useSettings';
+import { useAuth } from '../context/AuthContext';
 import { LibraryHeader } from '../components/LibraryHeader';
 import { BookCard } from '../components/BookCard';
 import { AddBookModal } from '../components/AddBookModal';
@@ -13,6 +14,8 @@ import { SettingsModal } from '../components/SettingsModal';
 import { BackupModal } from '../components/BackupModal';
 
 export default function LibraryPage() {
+  const { user, isLoading: isAuthLoading, openAuthModal } = useAuth();
+
   const [books, setBooks] = useState<Book[]>([]);
   const [progressMap, setProgressMap] = useState<Record<string, Progress>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -33,6 +36,13 @@ export default function LibraryPage() {
   } = useSettings();
 
   const loadData = useCallback(async () => {
+    if (!user) {
+      setBooks([]);
+      setProgressMap({});
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const [fetchedBooks, fetchedProgress] = await Promise.all([
         getAllBooks(),
@@ -45,9 +55,13 @@ export default function LibraryPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    if (!user) {
+      return;
+    }
+
     let isMounted = true;
     Promise.all([getAllBooks(), getAllProgress()])
       .then(([fetchedBooks, fetchedProgress]) => {
@@ -67,7 +81,7 @@ export default function LibraryPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [user]);
 
   const handleBookDeleted = async () => {
     if (!deleteBookTarget) return;
@@ -76,8 +90,21 @@ export default function LibraryPage() {
     loadData();
   };
 
+  const handleOpenAddBook = () => {
+    if (!user) {
+      openAuthModal('register');
+      return;
+    }
+    setIsAddOpen(true);
+  };
+
   // Pre-load a sample classic if user wants an instant preview
   const handleLoadSample = async () => {
+    if (!user) {
+      openAuthModal('register');
+      return;
+    }
+
     setIsLoading(true);
     const sampleId = 'sample_alice_' + Date.now();
     const sampleBlocks = [
@@ -136,19 +163,80 @@ export default function LibraryPage() {
   return (
     <div className="min-h-screen flex flex-col font-sans">
       <LibraryHeader
-        onAddBook={() => setIsAddOpen(true)}
+        onAddBook={handleOpenAddBook}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenBackup={() => setIsBackupOpen(true)}
       />
 
       <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-8 py-8">
-        {isLoading ? (
+        {/* PostgreSQL & Auth Banner if not signed in */}
+        {!isAuthLoading && !user && (
+          <div className="mb-8 p-6 rounded-2xl border border-blue-500/20 bg-blue-500/5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 font-bold text-sm text-blue-600 dark:text-blue-400">
+                <span>🐘</span>
+                <span>PostgreSQL Database Storage Active</span>
+              </div>
+              <p className="text-xs opacity-75 max-w-xl leading-relaxed">
+                Scrollbound now stores all books, reading progress, and bookmarks in your local PostgreSQL database. Create an account or sign in to save and access your novel library.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => openAuthModal('login')}
+                className="px-4 py-2 text-xs font-semibold rounded-xl border border-black/15 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/5 transition"
+              >
+                Sign In
+              </button>
+              <button
+                onClick={() => openAuthModal('register')}
+                className="px-4 py-2 text-xs font-semibold rounded-xl text-white shadow transition"
+                style={{ backgroundColor: 'var(--sb-accent, #2563eb)' }}
+              >
+                Create Account
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isLoading || isAuthLoading ? (
           <div className="py-24 text-center">
             <div className="inline-block animate-spin text-3xl mb-3">⏳</div>
-            <div className="text-sm opacity-60">Loading your personal library...</div>
+            <div className="text-sm opacity-60">Loading from PostgreSQL database...</div>
+          </div>
+        ) : !user ? (
+          /* Unauthenticated State */
+          <div className="py-16 sm:py-24 text-center max-w-lg mx-auto">
+            <div className="w-20 h-20 rounded-3xl mx-auto mb-6 flex items-center justify-center text-4xl shadow-sm border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
+              🐘
+            </div>
+            <h2 className="text-2xl font-bold font-serif mb-3 tracking-tight">
+              Welcome to Scrollbound
+            </h2>
+            <p className="text-sm opacity-70 mb-8 leading-relaxed">
+              Sign in or create an account to start uploading PDF novels. Your library, reading position, and bookmarks will be securely stored in your local PostgreSQL database.
+            </p>
+
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                onClick={() => openAuthModal('register')}
+                className="w-full sm:w-auto px-6 py-3 rounded-2xl font-semibold text-white shadow hover:shadow-md transition active:scale-95 flex items-center justify-center gap-2 text-sm"
+                style={{ backgroundColor: 'var(--sb-accent, #2563eb)' }}
+              >
+                <span>🚀</span>
+                <span>Create Free Account</span>
+              </button>
+
+              <button
+                onClick={() => openAuthModal('login')}
+                className="w-full sm:w-auto px-5 py-3 rounded-2xl font-medium border border-black/15 dark:border-white/15 hover:bg-black/5 dark:hover:bg-white/5 transition text-sm"
+              >
+                Sign In
+              </button>
+            </div>
           </div>
         ) : books.length === 0 ? (
-          /* Empty State */
+          /* Empty State for Logged-In User */
           <div className="py-16 sm:py-24 text-center max-w-lg mx-auto">
             <div className="w-20 h-20 rounded-3xl mx-auto mb-6 flex items-center justify-center text-4xl shadow-sm border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5">
               📚
@@ -157,7 +245,7 @@ export default function LibraryPage() {
               Your Library is Empty
             </h2>
             <p className="text-sm opacity-70 mb-8 leading-relaxed">
-              Import a PDF novel to read it as clean, reflowable, distraction-free text on any screen. Original PDF files are parsed in memory and never stored.
+              Import a PDF novel to read it as clean, reflowable, distraction-free text. Extracted blocks are stored in PostgreSQL; original PDFs are parsed in memory and never saved.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -183,7 +271,7 @@ export default function LibraryPage() {
           <div>
             <div className="flex items-center justify-between mb-6">
               <div className="text-sm opacity-60">
-                {books.length} {books.length === 1 ? 'novel' : 'novels'} in library
+                {books.length} {books.length === 1 ? 'novel' : 'novels'} stored in PostgreSQL
               </div>
             </div>
 

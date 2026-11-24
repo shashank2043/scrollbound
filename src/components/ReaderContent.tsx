@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Block, Book, Bookmark, Progress, ReaderSettings } from '../lib/types';
+import { Block, Book, Bookmark, Progress, ReaderSettings, Chunk } from '../lib/types';
 import { getChunk, CHUNK_SIZE } from '../lib/db';
 
 interface ReaderContentProps {
@@ -54,20 +54,20 @@ export function ReaderContent({
       setIsLoadingChunk(true);
       const newMap = new Map<number, Block[]>();
 
-      // Load target chunk and subsequent chunk
-      const promises = [getChunk(book.id, initialChunk)];
-      if (initialChunk + 1 < book.chunkCount) {
-        promises.push(getChunk(book.id, initialChunk + 1));
-      }
-      if (initialChunk > 0) {
-        promises.push(getChunk(book.id, initialChunk - 1));
+      // Load all chunks from 0 up to initialChunk + 1 so layout above reader is solid and stable
+      const maxToLoad = Math.min(book.chunkCount - 1, initialChunk + 1);
+      const fromChunk = initialChunk <= 15 ? 0 : Math.max(0, initialChunk - 2);
+
+      const promises: Promise<Chunk | undefined>[] = [];
+      for (let c = fromChunk; c <= maxToLoad; c++) {
+        promises.push(getChunk(book.id, c));
       }
 
       const results = await Promise.all(promises);
       if (!isMounted) return;
 
-      let min = initialChunk;
-      let max = initialChunk;
+      let min = fromChunk;
+      let max = fromChunk;
 
       for (const chunk of results) {
         if (chunk) {
@@ -99,32 +99,41 @@ export function ReaderContent({
 
     isRestoringRef.current = true;
 
-    // Retry finding element in case DOM is still rendering
+    let attempts = 0;
     const interval = setInterval(() => {
+      attempts++;
       const el = document.getElementById(`block-${targetBlockId}`);
       if (el) {
         clearInterval(interval);
-        const rect = el.getBoundingClientRect();
-        const headerOffset = 80;
-        const targetScrollY = window.scrollY + rect.top + offset * rect.height - headerOffset;
-        window.scrollTo({
-          top: Math.max(0, targetScrollY),
-          behavior: 'instant',
+        const scrollToBlock = () => {
+          const rect = el.getBoundingClientRect();
+          const headerOffset = 80;
+          const targetScrollY = window.scrollY + rect.top + offset * rect.height - headerOffset;
+          window.scrollTo({
+            top: Math.max(0, targetScrollY),
+            behavior: 'instant',
+          });
+        };
+
+        // Multi-pass restoration to lock position across font metrics and layout passes
+        scrollToBlock();
+        requestAnimationFrame(() => {
+          scrollToBlock();
+          setTimeout(() => {
+            scrollToBlock();
+            setHasRestoredPosition(true);
+            isRestoringRef.current = false;
+          }, 60);
         });
+      } else if (attempts > 50) {
+        clearInterval(interval);
         setHasRestoredPosition(true);
         isRestoringRef.current = false;
       }
-    }, 50);
-
-    const timeout = setTimeout(() => {
-      clearInterval(interval);
-      setHasRestoredPosition(true);
-      isRestoringRef.current = false;
-    }, 2500);
+    }, 40);
 
     return () => {
       clearInterval(interval);
-      clearTimeout(timeout);
     };
   }, [hasRestoredPosition, chunkMap, initialProgress]);
 
@@ -246,15 +255,29 @@ export function ReaderContent({
           const sampleY = 90; // Top reading line under header
           const sampleX = window.innerWidth / 2;
 
-          // Find element under sample point
+          let foundBlock: HTMLElement | null = null;
           const el = document.elementFromPoint(sampleX, sampleY);
-          const blockEl = el?.closest('[data-block-id]') as HTMLElement | null;
+          if (el) {
+            foundBlock = el.closest('[data-block-id]') as HTMLElement | null;
+          }
 
-          if (blockEl && blockEl.dataset.blockId) {
-            const blockId = parseInt(blockEl.dataset.blockId, 10);
-            const rect = blockEl.getBoundingClientRect();
-            const offset = (sampleY - rect.top) / rect.height;
-            onPositionChange(blockId, Math.max(0, Math.min(1, offset)));
+          if (!foundBlock) {
+            const allVisibleBlocks = document.querySelectorAll<HTMLElement>('[data-block-id]');
+            for (let i = 0; i < allVisibleBlocks.length; i++) {
+              const b = allVisibleBlocks[i];
+              const r = b.getBoundingClientRect();
+              if (r.top <= sampleY + 20 && r.bottom >= sampleY - 20) {
+                foundBlock = b;
+                break;
+              }
+            }
+          }
+
+          if (foundBlock && foundBlock.dataset.blockId) {
+            const blockId = parseInt(foundBlock.dataset.blockId, 10);
+            const rect = foundBlock.getBoundingClientRect();
+            const offset = Math.max(0, Math.min(1, (sampleY - rect.top) / (rect.height || 1)));
+            onPositionChange(blockId, offset);
           }
 
           ticking = false;
@@ -263,8 +286,14 @@ export function ReaderContent({
       }
     };
 
-    window.addEventListener('scroll', checkPosition, { passive: true });
-    return () => window.removeEventListener('scroll', checkPosition);
+    const timer = setTimeout(() => {
+      window.addEventListener('scroll', checkPosition, { passive: true });
+    }, 150);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('scroll', checkPosition);
+    };
   }, [hasRestoredPosition, onPositionChange]);
 
   // Render all currently loaded blocks in sequential order

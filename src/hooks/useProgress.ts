@@ -67,6 +67,13 @@ export function useProgress(bookId: string, totalBlocks: number) {
 
       pendingProgressRef.current = prog;
 
+      // Immediate synchronous local cache
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(`scrollbound_progress_${bookId}`, JSON.stringify(prog));
+        } catch {}
+      }
+
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
       }

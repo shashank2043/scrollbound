@@ -31,6 +31,9 @@ export const viewport: Viewport = {
   maximumScale: 5,
 };
 
+import { AuthProvider } from '@/context/AuthContext';
+import { AuthModal } from '@/components/AuthModal';
+
 export default function RootLayout({
   children,
 }: {
@@ -72,7 +75,12 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <AuthProvider>
+          {children}
+          <AuthModal />
+        </AuthProvider>
+      </body>
     </html>
   );
 }
