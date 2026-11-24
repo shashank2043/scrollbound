@@ -37,11 +37,24 @@ export function LibraryHeader({
           {/* User Account / Auth buttons */}
           {user ? (
             <div className="flex items-center gap-2 border-r border-black/10 dark:border-white/10 pr-2 sm:pr-3">
+              {user.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.image}
+                  alt={user.name || user.email}
+                  className="w-7 h-7 rounded-full object-cover border border-black/10 dark:border-white/10 shrink-0"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold flex items-center justify-center text-xs shrink-0">
+                  {(user.name || user.email)[0].toUpperCase()}
+                </div>
+              )}
               <div className="text-right hidden sm:block">
-                <div className="text-xs font-semibold leading-tight truncate max-w-[140px]">
+                <div className="text-xs font-semibold leading-tight truncate max-w-[130px]">
                   {user.name || user.email.split('@')[0]}
                 </div>
-                <div className="text-[10px] opacity-60 truncate max-w-[140px]">
+                <div className="text-[10px] opacity-60 truncate max-w-[130px]">
                   {user.email}
                 </div>
               </div>

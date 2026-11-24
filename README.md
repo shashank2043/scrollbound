@@ -9,7 +9,7 @@ Upload any PDF novel, and Scrollbound extracts the text in memory, reflows it in
 ## Key Highlights
 
 - **PostgreSQL Database Storage**: All novel chunks, reading positions, bookmarks, custom themes, and user settings are persisted to a PostgreSQL database (`postgresql://postgres:postgres@localhost:5432/scrollbound`).
-- **User Authentication**: Account creation and login with secure bcrypt password hashing and HTTP-only JWT session cookies.
+- **User Authentication with Better Auth**: Modern authentication powered by **Better Auth** with both **Google OAuth ("Login with Google")** and email/password sign-in. Profiles feature user avatar photos and secure session management.
 - **Privacy First (PDFs Never Stored)**: The original PDF is read into memory, parsed page-by-page into clean text blocks, and then immediately discarded. The raw PDF file is **never** saved to PostgreSQL or the filesystem.
 - **High Performance & Large Novels**: Efficiently handles 1000+ page novels without freezing the UI by processing page-by-page and yielding to the main thread.
 - **Chunked Storage & Infinite Lazy Loading**: Stored in PostgreSQL in 200-block records (`Chunk`). Loads lazily as you scroll, rendering novels with 100k+ words with zero lag.
@@ -75,8 +75,38 @@ This creates the `users`, `books`, `chunks`, `progress`, `bookmarks`, and `custo
 4. In the **Configure Project** screen, open **Environment Variables** and add:
    - `DATABASE_URL`: Your Supabase transaction pooler URI (port `6543`, with `?pgbouncer=true`)
    - `DIRECT_URL`: Your Supabase direct connection URI (port `5432`)
-   - `JWT_SECRET`: A secure random 32+ character string (e.g. run `openssl rand -base64 32`)
+   - `BETTER_AUTH_SECRET`: A secure random 32+ character string (e.g. run `openssl rand -base64 32`)
+   - `BETTER_AUTH_URL`: Your Vercel production URL (e.g. `https://scrollbound.vercel.app`)
+   - `GOOGLE_CLIENT_ID`: Your Google OAuth Client ID (optional, for Google Sign-In)
+   - `GOOGLE_CLIENT_SECRET`: Your Google OAuth Client Secret (optional, for Google Sign-In)
 5. Click **Deploy**.
+
+---
+
+## Google OAuth Setup Guide
+
+To enable **"Continue with Google"**:
+
+1. Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2. Select or create a project.
+3. Navigate to **APIs & Services** ➔ **OAuth consent screen**:
+   - Set User Type to **External**.
+   - Fill in the App name (`Scrollbound`), user support email, and developer contact email.
+4. Navigate to **APIs & Services** ➔ **Credentials**:
+   - Click **+ Create Credentials** ➔ **OAuth client ID**.
+   - Select **Application type**: **Web application**.
+   - **Authorized JavaScript origins**:
+     - `http://localhost:3000` (for local development)
+     - `https://your-project.vercel.app` (for production)
+   - **Authorized redirect URIs**:
+     - `http://localhost:3000/api/auth/callback/google` (for local development)
+     - `https://your-project.vercel.app/api/auth/callback/google` (for production)
+5. Click **Create** and copy your **Client ID** and **Client Secret**.
+6. Paste them into `.env` (locally) and into your Vercel Project Environment Variables:
+   ```env
+   GOOGLE_CLIENT_ID="1234567890-abcdef.apps.googleusercontent.com"
+   GOOGLE_CLIENT_SECRET="GOCSPX-xxxxxxxxxxxxxxxx"
+   ```
 
 Vercel will run `prisma generate && next build` automatically during the build step and deploy your personal novel reader to the edge!
 

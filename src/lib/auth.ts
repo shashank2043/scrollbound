@@ -1,55 +1,71 @@
-import bcrypt from 'bcryptjs';
-import { SignJWT, jwtVerify } from 'jose';
-import { cookies } from 'next/headers';
+import { betterAuth } from 'better-auth';
+import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { prisma } from './prisma';
+import { headers } from 'next/headers';
 
-const JWT_SECRET_STRING = process.env.JWT_SECRET || 'scrollbound-fallback-jwt-secret-key-2026';
-const JWT_SECRET = new TextEncoder().encode(JWT_SECRET_STRING);
-export const AUTH_COOKIE_NAME = 'scrollbound_token';
+const baseURL =
+  process.env.BETTER_AUTH_URL ||
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
-export async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, 10);
-}
+const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
 
-export async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  return bcrypt.compare(password, hash);
-}
+export const isGoogleAuthEnabled = Boolean(googleClientId && googleClientSecret);
 
-export async function signToken(payload: { userId: string; email: string }): Promise<string> {
-  return new SignJWT(payload)
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime('30d')
-    .sign(JWT_SECRET);
-}
+export const auth = betterAuth({
+  database: prismaAdapter(prisma, {
+    provider: 'postgresql',
+  }),
+  baseURL,
+  secret:
+    process.env.BETTER_AUTH_SECRET ||
+    process.env.JWT_SECRET ||
+    'scrollbound-better-auth-fallback-secret-2026',
+  emailAndPassword: {
+    enabled: true,
+  },
+  socialProviders: {
+    google: {
+      clientId: googleClientId || 'NOT_CONFIGURED',
+      clientSecret: googleClientSecret || 'NOT_CONFIGURED',
+      enabled: isGoogleAuthEnabled,
+    },
+  },
+  user: {
+    modelName: 'User',
+  },
+  session: {
+    modelName: 'Session',
+  },
+  account: {
+    modelName: 'Account',
+  },
+  verification: {
+    modelName: 'Verification',
+  },
+});
 
-export async function verifyToken(token: string): Promise<{ userId: string; email: string } | null> {
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    if (typeof payload.userId === 'string' && typeof payload.email === 'string') {
-      return { userId: payload.userId, email: payload.email };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
+/**
+ * Retrieve the currently authenticated user from Better Auth session.
+ * Used by all internal API routes (books, chunks, progress, bookmarks, settings).
+ */
 export async function getCurrentUser() {
   try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get(AUTH_COOKIE_NAME)?.value;
-    if (!token) return null;
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
 
-    const payload = await verifyToken(token);
-    if (!payload) return null;
+    if (!session || !session.user) {
+      return null;
+    }
 
     const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
+      where: { id: session.user.id },
       select: {
         id: true,
         email: true,
         name: true,
+        image: true,
         settings: true,
         createdAt: true,
       },

@@ -1,11 +1,13 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authClient } from '@/lib/auth-client';
 
 export interface AuthUser {
   id: string;
   email: string;
   name: string | null;
+  image?: string | null;
   settings?: unknown;
 }
 
@@ -14,6 +16,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string, name?: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   openAuthModal: (mode?: 'login' | 'register') => void;
@@ -70,16 +73,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+      const { data, error } = await authClient.signIn.email({
+        email,
+        password,
       });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Failed to log in.' };
+
+      if (error) {
+        return { success: false, error: error.message || 'Failed to sign in.' };
       }
-      setUser(data.user);
+
+      if (data?.user) {
+        // Refresh full user data
+        await checkAuth();
+      }
+
       setIsAuthModalOpen(false);
       return { success: true };
     } catch (err: unknown) {
@@ -90,16 +97,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = async (email: string, password: string, name?: string) => {
     try {
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name }),
+      const { data, error } = await authClient.signUp.email({
+        email,
+        password,
+        name: name?.trim() || email.split('@')[0],
       });
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Failed to create account.' };
+
+      if (error) {
+        return { success: false, error: error.message || 'Failed to create account.' };
       }
-      setUser(data.user);
+
+      if (data?.user) {
+        await checkAuth();
+      }
+
       setIsAuthModalOpen(false);
       return { success: true };
     } catch (err: unknown) {
@@ -108,9 +119,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithGoogle = async () => {
+    try {
+      const callbackURL = typeof window !== 'undefined' ? window.location.href : '/';
+      const result = await authClient.signIn.social({
+        provider: 'google',
+        callbackURL,
+      });
+
+      if (result && 'error' in result && result.error) {
+        return { success: false, error: (result.error as { message?: string }).message || 'Google sign-in failed.' };
+      }
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Google sign-in error';
+      return { success: false, error: msg };
+    }
+  };
+
   const logout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await authClient.signOut();
       setUser(null);
     } catch {
       setUser(null);
@@ -133,6 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
         login,
         register,
+        signInWithGoogle,
         logout,
         refreshUser: checkAuth,
         openAuthModal,
