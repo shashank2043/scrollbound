@@ -3,9 +3,25 @@ import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { prisma } from './prisma';
 import { headers } from 'next/headers';
 
-const baseURL =
-  process.env.BETTER_AUTH_URL ||
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+function getAuthBaseURL(): string {
+  // If explicitly set and not localhost
+  if (process.env.BETTER_AUTH_URL && !process.env.BETTER_AUTH_URL.includes('localhost')) {
+    return process.env.BETTER_AUTH_URL.replace(/\/$/, '');
+  }
+  // Vercel production or preview URLs
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+  if (process.env.NEXT_PUBLIC_VERCEL_URL) {
+    return `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
+  }
+  return process.env.BETTER_AUTH_URL || 'http://localhost:3000';
+}
+
+const baseURL = getAuthBaseURL();
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
@@ -17,6 +33,41 @@ export const auth = betterAuth({
     provider: 'postgresql',
   }),
   baseURL,
+  trustedOrigins: async (request) => {
+    const origins = [
+      'http://localhost:3000',
+      'https://*.vercel.app',
+      '*.vercel.app',
+    ];
+
+    if (process.env.BETTER_AUTH_URL) {
+      origins.push(process.env.BETTER_AUTH_URL.replace(/\/$/, ''));
+    }
+    if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+      origins.push(`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`);
+    }
+    if (process.env.VERCEL_URL) {
+      origins.push(`https://${process.env.VERCEL_URL}`);
+    }
+
+    if (request) {
+      const origin = request.headers.get('origin') || request.headers.get('referer');
+      if (origin) {
+        try {
+          const parsed = new URL(origin);
+          if (
+            parsed.hostname === 'localhost' ||
+            parsed.hostname.endsWith('.vercel.app') ||
+            (process.env.BETTER_AUTH_URL && origin.startsWith(process.env.BETTER_AUTH_URL.replace(/\/$/, '')))
+          ) {
+            origins.push(parsed.origin);
+          }
+        } catch {}
+      }
+    }
+
+    return origins;
+  },
   secret:
     process.env.BETTER_AUTH_SECRET ||
     process.env.JWT_SECRET ||

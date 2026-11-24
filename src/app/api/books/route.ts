@@ -7,7 +7,7 @@ export async function GET() {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized. Please log in.' }, { status: 401 });
+      return NextResponse.json({ books: [], progressMap: {} }, { status: 200 });
     }
 
     const books = await prisma.book.findMany({
