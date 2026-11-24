@@ -1,0 +1,153 @@
+'use client';
+
+import React, { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
+import { Book, Progress } from '../lib/types';
+
+interface BookCardProps {
+  book: Book;
+  progress?: Progress;
+  onAppend: (book: Book) => void;
+  onDelete: (book: Book) => void;
+}
+
+export function BookCard({ book, progress, onAppend, onDelete }: BookCardProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    if (menuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [menuOpen]);
+
+  const percent = progress?.percent ?? 0;
+  const isStarted = percent > 0;
+
+  const formatDate = (timestamp?: number) => {
+    if (!timestamp) return 'Never read';
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+
+  return (
+    <div
+      className="relative rounded-2xl p-5 transition-all duration-200 hover:shadow-lg border flex flex-col justify-between group"
+      style={{
+        backgroundColor: 'var(--sb-bg)',
+        borderColor: 'rgba(128, 128, 128, 0.2)',
+      }}
+    >
+      <div>
+        {/* Top bar with menu */}
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="text-2xl select-none">📖</div>
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen(!menuOpen)}
+              className="p-1.5 rounded-lg opacity-60 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition"
+              aria-label="Book actions menu"
+            >
+              <svg className="w-5 h-5 fill-current" viewBox="0 0 20 20">
+                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+              </svg>
+            </button>
+
+            {menuOpen && (
+              <div
+                className="absolute right-0 top-full mt-1 w-52 rounded-xl shadow-xl z-20 py-1.5 border animate-fade-in text-sm font-sans"
+                style={{
+                  backgroundColor: 'var(--sb-bg)',
+                  borderColor: 'rgba(128, 128, 128, 0.25)',
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onAppend(book);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"
+                >
+                  <span>➕</span> Add another PDF to this book
+                </button>
+                <div className="my-1 border-t border-black/5 dark:border-white/5" />
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete(book);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-red-500/10 text-red-600 dark:text-red-400 transition flex items-center gap-2"
+                >
+                  <span>🗑️</span> Delete book
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Title */}
+        <Link href={`/read/${book.id}`} className="block group-hover:underline">
+          <h3 className="font-bold text-lg leading-snug line-clamp-2 mb-2 font-serif">
+            {book.title}
+          </h3>
+        </Link>
+
+        {/* Metadata */}
+        <div className="text-xs opacity-60 space-y-1 mb-4">
+          <div className="flex items-center justify-between">
+            <span>{book.blockCount.toLocaleString()} blocks</span>
+            <span>{formatDate(book.lastReadAt || book.updatedAt)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        {/* Progress bar */}
+        <div className="space-y-1.5 mb-4">
+          <div className="flex items-center justify-between text-xs opacity-75 font-mono">
+            <span>{isStarted ? `${Math.round(percent)}% read` : 'Unread'}</span>
+            {isStarted && progress && (
+              <span>Block #{progress.blockId + 1}</span>
+            )}
+          </div>
+          <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-2 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${percent}%`,
+                backgroundColor: 'var(--sb-accent, #2563eb)',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Action Button */}
+        <Link
+          href={`/read/${book.id}`}
+          className="w-full py-2.5 px-4 rounded-xl text-center text-sm font-semibold transition block shadow-sm hover:shadow active:scale-[0.99]"
+          style={{
+            backgroundColor: isStarted ? 'var(--sb-accent, #2563eb)' : 'transparent',
+            color: isStarted ? '#ffffff' : 'var(--sb-text)',
+            border: isStarted ? 'none' : '1px solid rgba(128, 128, 128, 0.3)',
+          }}
+        >
+          {isStarted ? 'Continue Reading' : 'Start Reading'}
+        </Link>
+      </div>
+    </div>
+  );
+}
