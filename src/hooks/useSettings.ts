@@ -12,6 +12,7 @@ import {
   saveCustomTheme,
   deleteCustomTheme,
   getLocalSettings,
+  getLocalCustomThemes,
   saveSettings,
   getSettings,
   setAutoSyncConfig,
@@ -32,47 +33,51 @@ export function useSettings() {
     };
   });
 
-  const [customThemes, setCustomThemes] = useState<CustomTheme[]>([]);
+  const [customThemes, setCustomThemes] = useState<CustomTheme[]>(() => {
+    return getLocalCustomThemes();
+  });
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load custom themes from local storage / DB and apply theme variables
+  // 2. Fetch custom themes and cloud settings ONCE on mount (no infinite loops)
   useEffect(() => {
-    getCustomThemes()
-      .then((themes) => {
-        setCustomThemes(themes);
+    let isMounted = true;
+
+    Promise.all([getCustomThemes(), getSettings()])
+      .then(([themes, cloudSettings]) => {
+        if (!isMounted) return;
+        if (themes && themes.length > 0) {
+          setCustomThemes(themes);
+        }
+        if (cloudSettings) {
+          setSettings((prev) => ({ ...prev, ...cloudSettings }));
+        }
         setIsLoaded(true);
-
-        const activeTheme =
-          PRESET_THEMES[settings.themeId] ||
-          themes.find((t) => t.id === settings.themeId) ||
-          PRESET_THEMES.light;
-
-        applyThemeVariables(activeTheme, settings);
       })
       .catch(() => {
-        setIsLoaded(true);
-        const activeTheme =
-          PRESET_THEMES[settings.themeId] || PRESET_THEMES.light;
-        applyThemeVariables(activeTheme, settings);
+        if (isMounted) setIsLoaded(true);
       });
-  }, [settings]);
 
-  // Sync settings with cloud if local wasn't present or on initial mount
+    return () => {
+      isMounted = false;
+    };
+  }, []); // Run strictly once on mount
+
+  // 3. Apply theme CSS variables when themeId, custom themes, or typography settings change
   useEffect(() => {
-    getSettings().then((cloudSettings) => {
-      if (cloudSettings) {
-        setSettings((prev) => {
-          const merged = { ...prev, ...cloudSettings };
-          const activeTheme =
-            PRESET_THEMES[merged.themeId] ||
-            customThemes.find((t) => t.id === merged.themeId) ||
-            PRESET_THEMES.light;
-          applyThemeVariables(activeTheme, merged);
-          return merged;
-        });
-      }
-    });
-  }, [customThemes]);
+    const activeTheme =
+      PRESET_THEMES[settings.themeId] ||
+      customThemes.find((t) => t.id === settings.themeId) ||
+      PRESET_THEMES.light;
+
+    applyThemeVariables(activeTheme, settings);
+  }, [
+    settings.themeId,
+    settings.fontSize,
+    settings.lineHeight,
+    settings.fontFamily,
+    settings.contentWidth,
+    customThemes,
+  ]);
 
   // Update settings: dual-write to local storage and PostgreSQL in parallel
   const updateSettings = useCallback(
@@ -92,39 +97,41 @@ export function useSettings() {
           );
         }
 
-        const activeTheme =
-          PRESET_THEMES[next.themeId] ||
-          customThemes.find((t) => t.id === next.themeId) ||
-          PRESET_THEMES.light;
-
-        applyThemeVariables(activeTheme, next);
         return next;
       });
     },
-    [customThemes]
+    []
   );
 
   // Add custom theme: dual-write
-  const addCustomTheme = useCallback(async (theme: CustomTheme) => {
-    await saveCustomTheme(theme);
-    setCustomThemes((prev) => {
-      const filtered = prev.filter((t) => t.id !== theme.id);
-      return [...filtered, theme];
-    });
-    // Automatically switch to the newly created theme
-    updateSettings({ themeId: theme.id });
-  }, [updateSettings]);
+  const addCustomTheme = useCallback(
+    async (theme: CustomTheme) => {
+      await saveCustomTheme(theme);
+      setCustomThemes((prev) => {
+        const filtered = prev.filter((t) => t.id !== theme.id);
+        return [...filtered, theme];
+      });
+      // Automatically switch to the newly created theme
+      updateSettings({ themeId: theme.id });
+    },
+    [updateSettings]
+  );
 
   // Remove custom theme: dual-write
   const removeCustomTheme = useCallback(
     async (id: string) => {
       await deleteCustomTheme(id);
       setCustomThemes((prev) => prev.filter((t) => t.id !== id));
-      if (settings.themeId === id) {
-        updateSettings({ themeId: 'light' });
-      }
+      setSettings((prev) => {
+        if (prev.themeId === id) {
+          const next = { ...prev, themeId: 'light' };
+          saveSettings(next);
+          return next;
+        }
+        return prev;
+      });
     },
-    [settings.themeId, updateSettings]
+    []
   );
 
   return {

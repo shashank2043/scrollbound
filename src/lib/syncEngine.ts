@@ -130,7 +130,7 @@ export function saveLocalSyncLog(log: SyncLogEntry[]): void {
 export function recordSyncAction(
   action: SyncActionType,
   payload: any,
-  status: 'pending' | 'synced' = 'pending',
+  status: 'pending' | 'synced' | 'failed' = 'pending',
   error?: string,
   durationMs?: number
 ): SyncLogEntry {
@@ -177,6 +177,14 @@ export function markSyncActionStatus(
   }
 
   // Handle failure
+  // If unauthorized / unauthenticated (HTTP 401), keep as pending locally without burning retries or showing failure modal
+  if (error && (error.includes('401') || error.toLowerCase().includes('unauthorized'))) {
+    current[index].status = 'pending';
+    current[index].error = 'Waiting for login (Unauthenticated)';
+    saveLocalSyncLog(current);
+    return;
+  }
+
   current[index].retryCount = (current[index].retryCount || 0) + 1;
   const updatedEntry = { ...current[index] };
   saveLocalSyncLog(current);
@@ -231,6 +239,11 @@ async function retrySingleActionDirectly(actionId: string): Promise<boolean> {
       markSyncActionStatus(entry.id, 'synced', undefined, elapsed);
       logStep(`Auto-retry attempt succeeded for [${entry.action}]`, 'synced', elapsed);
       return true;
+    } else if (res.status === 401) {
+      entry.status = 'pending';
+      entry.error = 'Waiting for login (Unauthenticated)';
+      saveLocalSyncLog(current);
+      return false;
     } else {
       markSyncActionStatus(entry.id, 'failed', `HTTP ${res.status}`, elapsed);
       return false;
@@ -277,6 +290,13 @@ export async function retryActionInForeground(
       markSyncActionStatus(entry.id, 'synced', undefined, elapsed);
       logStep(`Foreground retry completed for [${entry.action}]`, 'synced', elapsed);
       return { success: true };
+    } else if (res.status === 401) {
+      const errorMsg = 'Please log in to synchronize your local actions with the cloud.';
+      entry.status = 'pending';
+      entry.error = 'Waiting for login (Unauthenticated)';
+      saveLocalSyncLog(getLocalSyncLog());
+      logStep(`Foreground retry skipped for [${entry.action}] (Unauthenticated)`, 'retry');
+      return { success: false, error: errorMsg };
     } else {
       const errorMsg = `Server returned HTTP ${res.status}`;
       markSyncActionStatus(entry.id, 'failed', errorMsg, elapsed);
@@ -415,12 +435,14 @@ export async function rollbackLocalAction(actionId: string): Promise<void> {
   saveLocalSyncLog(updatedLog);
 
   // Notify any active page components to refresh their state
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(
-      new CustomEvent('scrollbound_rollback', {
-        detail: { action, payload },
-      })
-    );
+  if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+    try {
+      window.dispatchEvent(
+        new CustomEvent('scrollbound_rollback', {
+          detail: { action, payload },
+        })
+      );
+    } catch {}
   }
 
   logStep(`Local rollback completed for [${action}]`, 'synced');
@@ -486,6 +508,18 @@ export async function flushPendingSyncQueue(): Promise<{
         syncedCount: pending.length,
         remainingPending: 0,
       };
+    } else if (res.status === 401) {
+      const current = getLocalSyncLog();
+      const pendingIds = new Set(pending.map((p) => p.id));
+      for (const entry of current) {
+        if (pendingIds.has(entry.id)) {
+          entry.status = 'pending';
+          entry.error = 'Waiting for login (Unauthenticated)';
+        }
+      }
+      saveLocalSyncLog(current);
+      logStep('Pending actions kept locally (User not logged in)', 'reconcile');
+      return { syncedCount: 0, remainingPending: pending.length };
     } else {
       for (const p of pending) {
         markSyncActionStatus(p.id, 'failed', `HTTP ${res.status}`, elapsed);

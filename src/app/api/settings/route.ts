@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ success: true, guest: true }, { status: 200 });
     }
 
     const body = await request.json();
