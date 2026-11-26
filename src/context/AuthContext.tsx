@@ -28,6 +28,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const AUTH_CACHE_KEY = 'sb_auth_user';
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,41 +38,75 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = useCallback(async () => {
     try {
-      const res = await fetch('/api/auth/me');
+      // 1. Check Better Auth native client session (uses signed cookie cache)
+      const sessionResult = await authClient.getSession();
+      if (sessionResult?.data?.user) {
+        const sessionUser = sessionResult.data.user as AuthUser;
+        setUser((prev) => (prev ? { ...prev, ...sessionUser } : sessionUser));
+        try {
+          localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(sessionUser));
+        } catch {}
+      }
+
+      // 2. Fetch full DB user and settings from /api/auth/me
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
-        setUser(data.user || null);
-      } else {
+        if (data.user) {
+          setUser(data.user);
+          try {
+            localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(data.user));
+          } catch {}
+          return;
+        }
+      }
+
+      // If neither session nor /api/auth/me has a user, clear session
+      if (!sessionResult?.data?.user) {
         setUser(null);
+        try {
+          localStorage.removeItem(AUTH_CACHE_KEY);
+        } catch {}
       }
     } catch {
-      setUser(null);
+      // Fallback: check client-side session or preserve cached user if offline
+      try {
+        const sessionResult = await authClient.getSession();
+        if (sessionResult?.data?.user) {
+          setUser(sessionResult.data.user as AuthUser);
+          return;
+        }
+      } catch {}
+
+      if (typeof window !== 'undefined' && !navigator.onLine) {
+        // Keep offline user if offline
+      } else {
+        setUser(null);
+        try {
+          localStorage.removeItem(AUTH_CACHE_KEY);
+        } catch {}
+      }
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    let isMounted = true;
-    fetch('/api/auth/me')
-      .then((res) => (res.ok ? res.json() : { user: null }))
-      .then((data) => {
-        if (isMounted) {
-          setUser(data.user || null);
+    // 1. Restore cached user immediately on mount for 0ms visual hydration
+    try {
+      const cached = localStorage.getItem(AUTH_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.id) {
+          setUser(parsed);
           setIsLoading(false);
         }
-      })
-      .catch(() => {
-        if (isMounted) {
-          setUser(null);
-          setIsLoading(false);
-        }
-      });
+      }
+    } catch {}
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    // 2. Validate and refresh with server
+    checkAuth();
+  }, [checkAuth]);
 
   // Sync authentication state with the sync engine: cloud sync is locked when logged out
   useEffect(() => {
@@ -89,11 +125,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data?.user) {
-        // Refresh full user data
-        await checkAuth();
+        const u = data.user as AuthUser;
+        setUser(u);
+        try {
+          localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(u));
+        } catch {}
       }
 
       setIsAuthModalOpen(false);
+      // Non-blocking refresh for full DB user data/settings
+      checkAuth();
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Login failed';
@@ -114,10 +155,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data?.user) {
-        await checkAuth();
+        const u = data.user as AuthUser;
+        setUser(u);
+        try {
+          localStorage.setItem(AUTH_CACHE_KEY, JSON.stringify(u));
+        } catch {}
       }
 
       setIsAuthModalOpen(false);
+      checkAuth();
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed';
@@ -146,6 +192,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      try {
+        localStorage.removeItem(AUTH_CACHE_KEY);
+      } catch {}
       await authClient.signOut();
       setUser(null);
     } catch {

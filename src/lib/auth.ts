@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
+import { nextCookies } from 'better-auth/next-js';
 import { prisma } from './prisma';
 import { headers } from 'next/headers';
 
@@ -36,6 +37,18 @@ export const auth = betterAuth({
     provider: 'postgresql',
   }),
   baseURL,
+  plugins: [
+    nextCookies(),
+  ],
+  session: {
+    modelName: 'Session',
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // 5 minutes signed cookie cache to prevent database pool exhaustion
+    },
+    expiresIn: 30 * 24 * 60 * 60, // 30 days
+    updateAge: 24 * 60 * 60, // 1 day
+  },
   trustedOrigins: async (request) => {
     const origins = [
       'http://localhost:3000',
@@ -87,9 +100,6 @@ export const auth = betterAuth({
   user: {
     modelName: 'User',
   },
-  session: {
-    modelName: 'Session',
-  },
   account: {
     modelName: 'Account',
   },
@@ -104,28 +114,50 @@ export const auth = betterAuth({
  */
 export async function getCurrentUser() {
   try {
+    let reqHeaders: Headers;
+    try {
+      reqHeaders = await headers();
+    } catch {
+      // During static prerendering or outside request context
+      return null;
+    }
+
     const session = await auth.api.getSession({
-      headers: await headers(),
+      headers: reqHeaders,
     });
 
     if (!session || !session.user) {
       return null;
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        image: true,
-        settings: true,
-        createdAt: true,
-      },
-    });
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          image: true,
+          settings: true,
+          createdAt: true,
+        },
+      });
 
-    return user;
-  } catch {
+      return user || (session.user as unknown as typeof user);
+    } catch (dbErr) {
+      // If PostgreSQL connection pool is busy or reconnecting, fall back to valid session user
+      console.warn('[getCurrentUser] Database fetch failed, falling back to session user:', dbErr);
+      return session.user as unknown as {
+        id: string;
+        email: string;
+        name: string | null;
+        image: string | null;
+        settings: unknown;
+        createdAt: Date;
+      };
+    }
+  } catch (err) {
+    console.warn('[getCurrentUser] Session retrieval failed:', err);
     return null;
   }
 }

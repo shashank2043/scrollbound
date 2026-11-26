@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
 export function AuthModal() {
-  const { isAuthModalOpen, closeAuthModal, authModalMode, login, register, signInWithGoogle } = useAuth();
+  const { isAuthModalOpen, closeAuthModal, authModalMode, login, register, signInWithGoogle, user } = useAuth();
   const [customMode, setCustomMode] = useState<'login' | 'register' | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,13 +15,20 @@ export function AuthModal() {
 
   const mode = customMode ?? authModalMode;
 
-  if (!isAuthModalOpen) return null;
-
   const handleClose = () => {
     setCustomMode(null);
     setError(null);
     closeAuthModal();
   };
+
+  // Automatically close modal when user is signed in
+  React.useEffect(() => {
+    if (user && isAuthModalOpen) {
+      handleClose();
+    }
+  }, [user, isAuthModalOpen]);
+
+  if (!isAuthModalOpen) return null;
 
   const handleGoogleSignIn = async () => {
     setError(null);
@@ -34,6 +41,8 @@ export function AuthModal() {
             ? 'Google OAuth credentials (GOOGLE_CLIENT_ID & GOOGLE_CLIENT_SECRET) need to be configured in .env or Vercel.'
             : res.error || 'Failed to sign in with Google.'
         );
+      } else {
+        handleClose();
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Google sign-in failed';
@@ -53,14 +62,14 @@ export function AuthModal() {
       if (!res.success) {
         setError(res.error || 'Failed to log in.');
       } else {
-        setCustomMode(null);
+        handleClose();
       }
     } else {
       const res = await register(email, password, name);
       if (!res.success) {
         setError(res.error || 'Failed to register.');
       } else {
-        setCustomMode(null);
+        handleClose();
       }
     }
 
