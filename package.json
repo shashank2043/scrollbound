@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && tsx tests/integration.test.ts && next build",
     "start": "next start",
     "test": "tsx tests/integration.test.ts",
+    "test:integration": "tsx tests/integration.test.ts",
+    "test:unit": "tsx tests/backend.unit.test.ts",
     "lint": "eslint",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
