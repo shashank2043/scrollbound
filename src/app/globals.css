@@ -10,6 +10,20 @@
   --sb-content-width: 65ch;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Prevent horizontal scroll and overflow on mobile devices */
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
 body {
   background-color: var(--sb-bg);
   color: var(--sb-text);

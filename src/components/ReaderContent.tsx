@@ -331,7 +331,7 @@ export function ReaderContent({
   return (
     <div
       ref={containerRef}
-      className="pt-20 pb-40 px-4 sm:px-8 transition-all"
+      className="pt-20 pb-40 px-3 sm:px-8 transition-all max-w-full overflow-x-hidden"
       style={{
         fontSize: 'var(--sb-font-size, 18px)',
         fontFamily: 'var(--sb-font-family, serif)',
@@ -351,7 +351,7 @@ export function ReaderContent({
 
       {/* Main reader container with constrained width */}
       <div
-        className="mx-auto select-text"
+        className="mx-auto select-text max-w-full break-words"
         style={{
           maxWidth: 'var(--sb-content-width, 65ch)',
         }}
@@ -371,7 +371,7 @@ export function ReaderContent({
                   isActive ? 'bg-black/[0.03] dark:bg-white/[0.04] px-2' : ''
                 }`}
               >
-                <h2 className="text-xl sm:text-2xl font-bold tracking-tight opacity-95 text-center font-serif">
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight opacity-95 text-center font-serif break-words">
                   {block.text}
                 </h2>
 
@@ -412,7 +412,7 @@ export function ReaderContent({
                   : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
               }`}
             >
-              <p className="text-justify sm:text-left leading-relaxed">
+              <p className="text-justify sm:text-left leading-relaxed break-words">
                 {block.text}
               </p>
 

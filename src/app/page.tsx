@@ -139,14 +139,14 @@ export default function LibraryPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col font-sans transition-colors duration-200">
+    <div className="min-h-screen flex flex-col font-sans transition-colors duration-200 max-w-full overflow-x-hidden">
       <LibraryHeader
         onAddBook={handleOpenAddBook}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenBackup={() => setIsBackupOpen(true)}
       />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 max-w-full overflow-x-hidden">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 space-y-4">
             <CircularProgress size={44} strokeWidth={4} label="Loading library..." />

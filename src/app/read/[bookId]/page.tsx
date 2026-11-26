@@ -168,7 +168,7 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
   }
 
   return (
-    <div className="min-h-screen relative font-sans selection:bg-blue-500/20">
+    <div className="min-h-screen relative font-sans selection:bg-blue-500/20 max-w-full overflow-x-hidden">
       {/* Floating Toolbar with Auto-Hide & Progress Bar */}
       <ReaderToolbar
         title={book.title}
