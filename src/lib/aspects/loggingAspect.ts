@@ -7,6 +7,7 @@ import {
   SyncActionType,
   recordSyncAction,
   markSyncActionStatus,
+  isSyncAuthenticated,
 } from '../syncEngine';
 
 export interface AspectJoinPoint<TArgs extends any[], TReturn> {
@@ -112,6 +113,18 @@ export function aopBackgroundSync<TArgs extends any[]>(
   return (...args: TArgs): void => {
     const timeStr = new Date().toLocaleTimeString();
     const payload = getPayload ? getPayload(...args) : args[0];
+
+    // Security Gate: Cloud sync is strictly impossible without signing in.
+    // The action is safely preserved in local storage outbox until the user logs in.
+    if (!isSyncAuthenticated()) {
+      recordSyncAction(actionType, payload, 'pending', 'Sign in required for cloud sync');
+      console.log(
+        `%c[Scrollbound AOP ${timeStr}] 🔒 [${name}] saved locally (cloud sync requires sign-in)`,
+        'color: #94a3b8; font-weight: bold; padding: 2px 6px;'
+      );
+      return;
+    }
+
     const logEntry = recordSyncAction(actionType, payload, 'pending');
 
     console.log(

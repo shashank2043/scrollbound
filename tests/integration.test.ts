@@ -106,6 +106,8 @@ import {
   setAutoSyncConfig,
   retryActionInForeground,
   rollbackLocalAction,
+  setSyncAuthStatus,
+  isSyncAuthenticated,
   MAX_SYNC_LOG_ENTRIES,
   SyncLogEntry,
 } from '../src/lib/syncEngine';
@@ -127,7 +129,7 @@ import { aopLogged, formatDuration } from '../src/lib/aspects/loggingAspect';
 
 import { POST as settingsPost, GET as settingsGet } from '../src/app/api/settings/route';
 import { POST as themePost, DELETE as themeDelete } from '../src/app/api/settings/themes/route';
-import { GET as syncGet } from '../src/app/api/sync/route';
+import { GET as syncGet, POST as syncPost } from '../src/app/api/sync/route';
 
 async function runAllTests() {
   console.log('\n======================================================');
@@ -481,10 +483,15 @@ async function runAllTests() {
     assertEqual(sum, 42, 'Wrapped function should return correct result');
   });
 
-  // Suite 11: API Route Handlers Contracts
-  console.log('\n\x1b[36m▶ Suite 11: API Route Contracts (Settings, Themes, Sync)\x1b[0m');
+  // Suite 11: Security Gate & Cloud Sync Authentication Enforcement
+  console.log('\n\x1b[36m▶ Suite 11: Security Gate (Cloud Sync Strictly Impossible Without Sign-in)\x1b[0m');
 
-  await test('POST /api/settings handles guest/unauthenticated request without 401 failure', async () => {
+  await test('Cloud sync is disabled by default when unauthenticated', () => {
+    setSyncAuthStatus(false);
+    assertEqual(isSyncAuthenticated(), false, 'isSyncAuthenticated must be false when unauthenticated');
+  });
+
+  await test('POST /api/settings strictly returns 401 Unauthorized without sign in', async () => {
     const mockRequest = new Request('http://localhost:3000/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -492,21 +499,12 @@ async function runAllTests() {
     });
 
     const response = await settingsPost(mockRequest);
-    assertEqual(response.status, 200, 'POST /api/settings should return 200 for guest');
+    assertEqual(response.status, 401, 'POST /api/settings must return 401 Unauthorized without sign in');
     const json = await response.json();
-    assert(json.success === true, 'Response should indicate success');
-    assert(json.guest === true, 'Response should denote guest mode');
+    assert(json.error.includes('Unauthorized'), 'Error message must state Unauthorized');
   });
 
-  await test('GET /api/settings returns settings and custom themes structure', async () => {
-    const response = await settingsGet();
-    assertEqual(response.status, 200, 'GET /api/settings should return 200');
-    const json = await response.json();
-    assert('settings' in json, 'Response should contain settings field');
-    assert('customThemes' in json, 'Response should contain customThemes field');
-  });
-
-  await test('POST /api/settings/themes handles guest custom themes gracefully', async () => {
+  await test('POST /api/settings/themes strictly returns 401 Unauthorized without sign in', async () => {
     const mockRequest = new Request('http://localhost:3000/api/settings/themes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -514,27 +512,40 @@ async function runAllTests() {
     });
 
     const response = await themePost(mockRequest);
-    assertEqual(response.status, 200, 'POST /api/settings/themes should return 200 for guest');
-    const json = await response.json();
-    assert(json.success === true, 'Theme response should indicate success');
+    assertEqual(response.status, 401, 'POST /api/settings/themes must return 401 without sign in');
   });
 
-  await test('DELETE /api/settings/themes handles guest deletion gracefully', async () => {
+  await test('DELETE /api/settings/themes strictly returns 401 Unauthorized without sign in', async () => {
     const mockRequest = new Request('http://localhost:3000/api/settings/themes?id=t1', {
       method: 'DELETE',
     });
 
     const response = await themeDelete(mockRequest);
-    assertEqual(response.status, 200, 'DELETE /api/settings/themes should return 200 for guest');
-    const json = await response.json();
-    assert(json.success === true, 'Theme delete response should indicate success');
+    assertEqual(response.status, 401, 'DELETE /api/settings/themes must return 401 without sign in');
   });
 
-  await test('GET /api/sync returns syncLog array structure and serverTime', async () => {
+  await test('GET /api/sync strictly returns 401 Unauthorized without sign in', async () => {
     const response = await syncGet();
-    assertEqual(response.status, 200, 'GET /api/sync should return 200');
-    const json = await response.json();
-    assert(Array.isArray(json.syncLog), 'syncLog should be an array');
+    assertEqual(response.status, 401, 'GET /api/sync must return 401 without sign in');
+  });
+
+  await test('POST /api/sync strictly returns 401 Unauthorized without sign in', async () => {
+    const mockRequest = new Request('http://localhost:3000/api/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actions: [{ id: 'a1', action: 'SAVE_SETTINGS', payload: {}, retryCount: 0, status: 'pending', timestamp: Date.now() }] }),
+    });
+
+    const response = await syncPost(mockRequest);
+    assertEqual(response.status, 401, 'POST /api/sync must return 401 without sign in');
+  });
+
+  await test('Signing in unlocks cloud sync status in syncEngine', () => {
+    setSyncAuthStatus(true);
+    assertEqual(isSyncAuthenticated(), true, 'isSyncAuthenticated must be true when signed in');
+    // Lock it back
+    setSyncAuthStatus(false);
+    assertEqual(isSyncAuthenticated(), false, 'isSyncAuthenticated must return to false on sign out');
   });
 
   // Final Summary

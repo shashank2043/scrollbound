@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authClient } from '@/lib/auth-client';
+import { setSyncAuthStatus } from '@/lib/syncEngine';
 
 export interface AuthUser {
   id: string;
@@ -70,6 +71,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isMounted = false;
     };
   }, []);
+
+  // Sync authentication state with the sync engine: cloud sync is locked when logged out
+  useEffect(() => {
+    setSyncAuthStatus(Boolean(user));
+  }, [user]);
 
   const login = async (email: string, password: string) => {
     try {

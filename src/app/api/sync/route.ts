@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ syncLog: [] }, { status: 200 });
+      return NextResponse.json({ error: 'Unauthorized. Cloud sync requires authentication.' }, { status: 401 });
     }
 
     const userData = await prisma.user.findUnique({

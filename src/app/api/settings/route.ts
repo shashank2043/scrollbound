@@ -48,7 +48,7 @@ export async function POST(request: Request) {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ success: true, guest: true }, { status: 200 });
+      return NextResponse.json({ error: 'Unauthorized. Cloud sync requires authentication.' }, { status: 401 });
     }
 
     const body = await request.json();

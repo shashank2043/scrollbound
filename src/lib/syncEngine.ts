@@ -459,12 +459,31 @@ export function getPendingSyncActions(): SyncLogEntry[] {
  * Flush all pending actions to the cloud API /api/sync
  */
 let isSyncing = false;
+let isAuthenticatedUser = false;
+
+/**
+ * Update authentication status for the sync engine.
+ * Cloud synchronization is STRICTLY DISABLED without sign in.
+ */
+export function setSyncAuthStatus(authenticated: boolean): void {
+  isAuthenticatedUser = authenticated;
+  if (!authenticated) {
+    logStep('Cloud sync locked (User is not signed in)', 'reconcile');
+  } else {
+    logStep('Cloud sync unlocked (User authenticated)', 'reconcile');
+    flushPendingSyncQueue();
+  }
+}
+
+export function isSyncAuthenticated(): boolean {
+  return isAuthenticatedUser;
+}
 
 export async function flushPendingSyncQueue(): Promise<{
   syncedCount: number;
   remainingPending: number;
 }> {
-  if (isSyncing || typeof window === 'undefined') {
+  if (!isAuthenticatedUser || isSyncing || typeof window === 'undefined') {
     return { syncedCount: 0, remainingPending: getPendingSyncActions().length };
   }
 
@@ -561,7 +580,8 @@ export async function fetchCloudSyncLog(): Promise<SyncLogEntry[]> {
  * Compares local sync log with cloud sync log every 5 minutes (or configured interval).
  */
 export async function reconcileWithCloud(): Promise<void> {
-  if (typeof window === 'undefined') return;
+  // Strictly prevent any cloud communication if unauthenticated
+  if (!isAuthenticatedUser || typeof window === 'undefined') return;
 
   const startReconcile = performance.now();
   logStep('Cloud Reconciliation (Periodic check)', 'start');
