@@ -4,9 +4,8 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-function getOptimizedDatabaseUrl(): string | undefined {
-  const url = process.env.DATABASE_URL;
-  if (!url) return undefined;
+function getOptimizedDatabaseUrl(): string {
+  const url = process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/scrollbound';
 
   // If connecting to Supabase transaction pooler (port 6543 or pgbouncer)
   // Ensure connection_limit=1 is set to prevent pool exhaustion (ECHECKOUTTIMEOUT)

@@ -32,3 +32,7 @@ jobs:
 
       - name: Run Backend Logic Unit Tests
         run: pnpm test:unit
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/scrollbound"
+          BETTER_AUTH_SECRET: "scrollbound-ci-test-secret-2026-very-secure"
+          BETTER_AUTH_URL: "http://localhost:3000"
