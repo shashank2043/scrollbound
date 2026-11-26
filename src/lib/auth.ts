@@ -26,12 +26,8 @@ const baseURL = getAuthBaseURL();
 const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
 
-// If explicitly provided via GOOGLE_REDIRECT_URI or derived from BETTER_AUTH_URL
-const googleRedirectURI =
-  process.env.GOOGLE_REDIRECT_URI ||
-  (process.env.BETTER_AUTH_URL && !process.env.BETTER_AUTH_URL.includes('localhost')
-    ? `${process.env.BETTER_AUTH_URL.replace(/\/$/, '')}/api/auth/callback/google`
-    : undefined);
+// If explicitly provided via GOOGLE_REDIRECT_URI environment variable
+const googleRedirectURI = process.env.GOOGLE_REDIRECT_URI || undefined;
 
 export const isGoogleAuthEnabled = Boolean(googleClientId && googleClientSecret);
 
@@ -58,22 +54,20 @@ export const auth = betterAuth({
     }
 
     if (request) {
-      const origin = request.headers.get('origin') || request.headers.get('referer');
+      const origin = request.headers.get('origin');
       if (origin) {
+        origins.push(origin);
+      }
+      const referer = request.headers.get('referer');
+      if (referer) {
         try {
-          const parsed = new URL(origin);
-          if (
-            parsed.hostname === 'localhost' ||
-            parsed.hostname.endsWith('.vercel.app') ||
-            (process.env.BETTER_AUTH_URL && origin.startsWith(process.env.BETTER_AUTH_URL.replace(/\/$/, '')))
-          ) {
-            origins.push(parsed.origin);
-          }
+          const parsed = new URL(referer);
+          origins.push(parsed.origin);
         } catch {}
       }
     }
 
-    return origins;
+    return Array.from(new Set(origins));
   },
   secret:
     process.env.BETTER_AUTH_SECRET ||

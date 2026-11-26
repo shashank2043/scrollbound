@@ -25,14 +25,22 @@ import { CircularProgress } from '../components/CircularProgress';
 
 export default function LibraryPage() {
   const { user, isLoading: isAuthLoading, openAuthModal } = useAuth();
+  const [isMounted, setIsMounted] = useState(false);
 
-  // Instant 0ms render from synchronous local cache
-  const [books, setBooks] = useState<Book[]>(() => getCachedBooks());
-  const [progressMap, setProgressMap] = useState<Record<string, Progress>>(() => getCachedProgressMap());
-  const [isLoading, setIsLoading] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    return getCachedBooks().length === 0;
-  });
+  // Hydration-safe initial state (matches server SSR 100%)
+  const [books, setBooks] = useState<Book[]>([]);
+  const [progressMap, setProgressMap] = useState<Record<string, Progress>>({});
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // Synchronously load from local cache right after mount (prevents React 418 hydration mismatch)
+  useEffect(() => {
+    setIsMounted(true);
+    const cachedBooks = getCachedBooks();
+    const cachedProgress = getCachedProgressMap();
+    setBooks(cachedBooks);
+    setProgressMap(cachedProgress);
+    setIsLoading(cachedBooks.length === 0);
+  }, []);
 
   // Modals state
   const [isAddOpen, setIsAddOpen] = useState(false);

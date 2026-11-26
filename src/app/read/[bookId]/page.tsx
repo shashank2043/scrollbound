@@ -29,17 +29,20 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
   const resolvedParams = use(params);
   const bookId = resolvedParams.bookId;
 
-  // Instant render from local cache if book was already loaded / in library
-  const [book, setBook] = useState<Book | null>(() => {
-    return getCachedBooks().find((b) => b.id === bookId) || null;
-  });
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => {
-    return getLocalBookmarks(bookId);
-  });
-  const [isLoadingBook, setIsLoadingBook] = useState<boolean>(() => {
-    return !getCachedBooks().some((b) => b.id === bookId);
-  });
+  // Hydration-safe state (matches server SSR, avoids React 418 error)
+  const [book, setBook] = useState<Book | null>(null);
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+  const [isLoadingBook, setIsLoadingBook] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const cached = getCachedBooks().find((b) => b.id === bookId) || null;
+    if (cached) {
+      setBook(cached);
+      setIsLoadingBook(false);
+    }
+    setBookmarks(getLocalBookmarks(bookId));
+  }, [bookId]);
 
   // Panels
   const [isBookmarksOpen, setIsBookmarksOpen] = useState(false);
