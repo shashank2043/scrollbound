@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { extractPdfBlocks, ExtractProgress } from '../lib/pdf/extract';
 import { saveBook, createChunksFromBlocks } from '../lib/db';
 import { Book } from '../lib/types';
+import { CircularProgress } from './CircularProgress';
 
 interface AddBookModalProps {
   isOpen: boolean;
@@ -177,27 +178,27 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
           ) : (
             /* Progress view */
             <div className="py-6 text-center space-y-4">
-              <div className="inline-block animate-spin text-3xl">⏳</div>
-              <div>
-                <div className="text-base font-semibold">
-                  {progress?.stage === 'loading' && 'Opening PDF document...'}
-                  {progress?.stage === 'extracting' &&
-                    `Extracting page ${progress.current} of ${progress.total}...`}
-                  {progress?.stage === 'reflowing' && 'Reflowing text into clean blocks...'}
-                </div>
-                <div className="text-xs opacity-60 mt-1">
-                  Processes in background without freezing. PDF is parsed and immediately discarded.
-                </div>
-              </div>
+              <CircularProgress
+                progress={calculatePercent()}
+                size={72}
+                strokeWidth={5}
+                label={
+                  progress?.stage === 'loading'
+                    ? 'Opening PDF document...'
+                    : progress?.stage === 'extracting'
+                    ? `Extracting page ${progress.current} of ${progress.total}...`
+                    : 'Reflowing text into clean blocks...'
+                }
+                sublabel="Processes in background. PDF is parsed in memory and immediately discarded."
+              />
 
               {/* Progress bar */}
-              <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-3 overflow-hidden">
+              <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-2.5 overflow-hidden mt-3">
                 <div
                   className="bg-blue-600 h-full rounded-full transition-all duration-200"
                   style={{ width: `${calculatePercent()}%` }}
                 />
               </div>
-              <div className="text-xs font-mono opacity-70">{calculatePercent()}% complete</div>
             </div>
           )}
         </div>

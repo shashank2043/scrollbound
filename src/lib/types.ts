@@ -56,6 +56,8 @@ export interface ReaderSettings {
   lineHeight: number; // e.g. 1.4 to 2.2
   contentWidth: number; // e.g. 55 to 80 (ch)
   themeId: string; // 'light' | 'dark' | 'sepia' or custom theme ID
+  autoSyncEnabled?: boolean; // Turn on/off auto sync
+  autoSyncIntervalMinutes?: number; // e.g. 1, 2, 5, 10, 15, 30 (default 5)
 }
 
 export interface ExportData {

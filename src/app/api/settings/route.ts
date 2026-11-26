@@ -21,8 +21,15 @@ export async function GET() {
       }),
     ]);
 
+    const settingsObj = (userData?.settings as Record<string, any>) || null;
+    let cleanSettings = settingsObj;
+    if (settingsObj && '_syncLog' in settingsObj) {
+      const { _syncLog, ...rest } = settingsObj;
+      cleanSettings = rest;
+    }
+
     return NextResponse.json({
-      settings: userData?.settings || null,
+      settings: cleanSettings,
       customThemes: customThemes.map((t) => ({
         id: t.id,
         name: t.name,
@@ -47,10 +54,20 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { settings } = body;
 
+    const current = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { settings: true },
+    });
+    const currentObj = (current?.settings as Record<string, any>) || {};
+
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        settings: settings as Prisma.InputJsonValue,
+        settings: {
+          ...currentObj,
+          ...settings,
+          _syncLog: currentObj._syncLog,
+        } as Prisma.InputJsonValue,
       },
     });
 

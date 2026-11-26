@@ -109,7 +109,7 @@ export function AuthModal() {
           >
             {isGoogleSubmitting ? (
               <span className="flex items-center gap-2">
-                <span className="animate-spin text-base">⏳</span>
+                <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 <span>Connecting to Google...</span>
               </span>
             ) : (
@@ -204,7 +204,7 @@ export function AuthModal() {
           >
             {isSubmitting ? (
               <span className="flex items-center justify-center gap-2">
-                <span className="animate-spin">⏳</span>
+                <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 <span>{mode === 'login' ? 'Signing in...' : 'Creating account...'}</span>
               </span>
             ) : mode === 'login' ? (

@@ -7,34 +7,35 @@ import {
   PRESET_THEMES,
   applyThemeVariables,
 } from '../lib/theme';
-import { getCustomThemes, saveCustomTheme, deleteCustomTheme } from '../lib/db';
-
-const STORAGE_KEY = 'scrollbound_reader_settings';
+import {
+  getCustomThemes,
+  saveCustomTheme,
+  deleteCustomTheme,
+  getLocalSettings,
+  saveSettings,
+  getSettings,
+  setAutoSyncConfig,
+} from '../lib/db';
 
 export function useSettings() {
+  // 1. Immediately read settings from localStorage for 0ms initial render
   const [settings, setSettings] = useState<ReaderSettings>(() => {
+    const local = getLocalSettings();
+    if (local) return local;
     if (typeof window === 'undefined') return DEFAULT_SETTINGS;
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
-      }
-      const isDark =
-        window.matchMedia &&
-        window.matchMedia('(prefers-color-scheme: dark)').matches;
-      return {
-        ...DEFAULT_SETTINGS,
-        themeId: isDark ? 'dark' : 'light',
-      };
-    } catch {
-      return DEFAULT_SETTINGS;
-    }
+    const isDark =
+      window.matchMedia &&
+      window.matchMedia('(prefers-color-scheme: dark)').matches;
+    return {
+      ...DEFAULT_SETTINGS,
+      themeId: isDark ? 'dark' : 'light',
+    };
   });
 
   const [customThemes, setCustomThemes] = useState<CustomTheme[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load custom themes from IndexedDB and apply theme
+  // Load custom themes from local storage / DB and apply theme variables
   useEffect(() => {
     getCustomThemes()
       .then((themes) => {
@@ -56,14 +57,40 @@ export function useSettings() {
       });
   }, [settings]);
 
-  // Update settings and reflect immediately in CSS variables and localStorage
+  // Sync settings with cloud if local wasn't present or on initial mount
+  useEffect(() => {
+    getSettings().then((cloudSettings) => {
+      if (cloudSettings) {
+        setSettings((prev) => {
+          const merged = { ...prev, ...cloudSettings };
+          const activeTheme =
+            PRESET_THEMES[merged.themeId] ||
+            customThemes.find((t) => t.id === merged.themeId) ||
+            PRESET_THEMES.light;
+          applyThemeVariables(activeTheme, merged);
+          return merged;
+        });
+      }
+    });
+  }, [customThemes]);
+
+  // Update settings: dual-write to local storage and PostgreSQL in parallel
   const updateSettings = useCallback(
     (newSettings: Partial<ReaderSettings>) => {
       setSettings((prev) => {
         const next = { ...prev, ...newSettings };
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-        } catch {}
+        saveSettings(next); // writes to local storage AND database in parallel
+
+        // Dynamically adjust auto sync timer or disable it
+        if (
+          typeof next.autoSyncEnabled === 'boolean' ||
+          typeof next.autoSyncIntervalMinutes === 'number'
+        ) {
+          setAutoSyncConfig(
+            next.autoSyncEnabled ?? true,
+            next.autoSyncIntervalMinutes ?? 5
+          );
+        }
 
         const activeTheme =
           PRESET_THEMES[next.themeId] ||
@@ -77,7 +104,7 @@ export function useSettings() {
     [customThemes]
   );
 
-  // Add custom theme
+  // Add custom theme: dual-write
   const addCustomTheme = useCallback(async (theme: CustomTheme) => {
     await saveCustomTheme(theme);
     setCustomThemes((prev) => {
@@ -88,7 +115,7 @@ export function useSettings() {
     updateSettings({ themeId: theme.id });
   }, [updateSettings]);
 
-  // Remove custom theme
+  // Remove custom theme: dual-write
   const removeCustomTheme = useCallback(
     async (id: string) => {
       await deleteCustomTheme(id);
@@ -100,18 +127,12 @@ export function useSettings() {
     [settings.themeId, updateSettings]
   );
 
-  const activeTheme =
-    PRESET_THEMES[settings.themeId] ||
-    customThemes.find((t) => t.id === settings.themeId) ||
-    PRESET_THEMES.light;
-
   return {
     settings,
     customThemes,
-    activeTheme,
+    isLoaded,
     updateSettings,
     addCustomTheme,
     removeCustomTheme,
-    isLoaded,
   };
 }

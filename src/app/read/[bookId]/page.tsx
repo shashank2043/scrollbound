@@ -3,13 +3,23 @@
 import React, { useState, useEffect, use, Suspense } from 'react';
 import Link from 'next/link';
 import { Book, Bookmark } from '../../../lib/types';
-import { getBook, getBookmarks, addBookmark, deleteBookmark, updateBookmarkNote } from '../../../lib/db';
+import {
+  getBook,
+  getBookmarks,
+  addBookmark,
+  deleteBookmark,
+  updateBookmarkNote,
+  getCachedBooks,
+  getLocalBookmarks,
+  initSyncEngine,
+} from '../../../lib/db';
 import { useProgress } from '../../../hooks/useProgress';
 import { useSettings } from '../../../hooks/useSettings';
 import { ReaderToolbar } from '../../../components/ReaderToolbar';
 import { ReaderContent } from '../../../components/ReaderContent';
 import { BookmarksDrawer } from '../../../components/BookmarksDrawer';
 import { SettingsModal } from '../../../components/SettingsModal';
+import { CircularProgress } from '../../../components/CircularProgress';
 
 interface PageProps {
   params: Promise<{ bookId: string }>;
@@ -19,9 +29,16 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
   const resolvedParams = use(params);
   const bookId = resolvedParams.bookId;
 
-  const [book, setBook] = useState<Book | null>(null);
-  const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
-  const [isLoadingBook, setIsLoadingBook] = useState(true);
+  // Instant render from local cache if book was already loaded / in library
+  const [book, setBook] = useState<Book | null>(() => {
+    return getCachedBooks().find((b) => b.id === bookId) || null;
+  });
+  const [bookmarks, setBookmarks] = useState<Bookmark[]>(() => {
+    return getLocalBookmarks(bookId);
+  });
+  const [isLoadingBook, setIsLoadingBook] = useState<boolean>(() => {
+    return !getCachedBooks().some((b) => b.id === bookId);
+  });
   const [error, setError] = useState<string | null>(null);
 
   // Panels
@@ -38,6 +55,19 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
   } = useSettings();
 
   useEffect(() => {
+    initSyncEngine();
+
+    const handleRollback = () => {
+      setBookmarks(getLocalBookmarks(bookId));
+    };
+    window.addEventListener('scrollbound_rollback', handleRollback);
+    return () => {
+      window.removeEventListener('scrollbound_rollback', handleRollback);
+    };
+  }, [bookId]);
+
+  // Background sync with database for fresh book details & bookmarks
+  useEffect(() => {
     let isMounted = true;
     Promise.all([getBook(bookId), getBookmarks(bookId)])
       .then(([b, bms]) => {
@@ -51,11 +81,10 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
         setIsLoadingBook(false);
       })
       .catch((err: unknown) => {
-        if (isMounted) {
-          const msg = err instanceof Error ? err.message : String(err);
-          setError(msg);
-          setIsLoadingBook(false);
-        }
+        if (!isMounted) return;
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(msg);
+        setIsLoadingBook(false);
       });
 
     return () => {
@@ -72,7 +101,7 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
     flushProgress,
   } = useProgress(bookId, book?.blockCount ?? 0);
 
-  // Bookmark actions
+  // Optimistic bookmark actions (0ms instant UI update with background cloud sync)
   const handleAddBookmark = async (blockId: number, snippet: string, note?: string) => {
     const newBm: Bookmark = {
       id: 'bm_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
@@ -82,20 +111,20 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
       note,
       createdAt: Date.now(),
     };
-    await addBookmark(newBm);
     setBookmarks((prev) => [...prev, newBm]);
+    addBookmark(newBm);
   };
 
   const handleDeleteBookmark = async (id: string) => {
-    await deleteBookmark(id);
     setBookmarks((prev) => prev.filter((b) => b.id !== id));
+    deleteBookmark(id, bookId);
   };
 
   const handleUpdateNote = async (id: string, note: string) => {
-    await updateBookmarkNote(id, note);
     setBookmarks((prev) =>
       prev.map((b) => (b.id === id ? { ...b, note } : b))
     );
+    updateBookmarkNote(id, note, bookId);
   };
 
   const handleToggleBookmark = async (blockId: number, text: string) => {
@@ -110,9 +139,8 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
   if (isLoadingBook) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="text-center space-y-2">
-          <div className="text-3xl animate-spin">⏳</div>
-          <div className="text-sm opacity-60">Opening novel...</div>
+        <div className="text-center">
+          <CircularProgress size={48} strokeWidth={4} label="Opening novel..." />
         </div>
       </div>
     );
@@ -178,15 +206,17 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
       />
 
       {/* Appearance Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        customThemes={customThemes}
-        onUpdateSettings={updateSettings}
-        onAddCustomTheme={addCustomTheme}
-        onRemoveCustomTheme={removeCustomTheme}
-      />
+      {isSettingsOpen && (
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={settings}
+          customThemes={customThemes}
+          onUpdateSettings={updateSettings}
+          onAddCustomTheme={addCustomTheme}
+          onRemoveCustomTheme={removeCustomTheme}
+        />
+      )}
     </div>
   );
 }
@@ -196,9 +226,8 @@ export default function ReaderPage({ params }: PageProps) {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="text-center space-y-2">
-            <div className="text-3xl animate-spin">⏳</div>
-            <div className="text-sm opacity-60">Opening novel...</div>
+          <div className="text-center">
+            <CircularProgress size={48} strokeWidth={4} label="Loading reader..." />
           </div>
         </div>
       }
