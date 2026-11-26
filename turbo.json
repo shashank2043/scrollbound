@@ -11,6 +11,9 @@
     "test:unit": {
       "tags": ["ci"]
     },
+    "test:integration": {
+      "tags": ["ci"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
