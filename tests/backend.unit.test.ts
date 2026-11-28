@@ -33,6 +33,7 @@ import { GET as publicBooksGet } from '../src/app/api/books/public/route';
 import { PATCH as publicBookPatch } from '../src/app/api/books/[bookId]/public/route';
 import { GET as adminStatsGet } from '../src/app/api/admin/stats/route';
 import { isAdmin, ADMIN_EMAIL } from '../src/lib/admin';
+import { prisma } from '../src/lib/prisma';
 
 // Node.js test runner
 let totalTests = 0;
@@ -304,9 +305,17 @@ export async function runBackendUnitTests() {
   });
 
   await test('GET /api/books/public allows unauthenticated access (returns 200 with public books)', async () => {
-    const req = new Request('http://localhost:3000/api/books/public', { method: 'GET' });
-    const res = await publicBooksGet(req);
-    assertEquals(res.status, 200);
+    const originalFindMany = prisma.book.findMany;
+    try {
+      (prisma.book as any).findMany = async () => [];
+      const req = new Request('http://localhost:3000/api/books/public', { method: 'GET' });
+      const res = await publicBooksGet(req);
+      assertEquals(res.status, 200);
+      const data = await res.json();
+      assert(Array.isArray(data.books), 'books should be an array');
+    } finally {
+      prisma.book.findMany = originalFindMany;
+    }
   });
 
   await test('PATCH /api/books/[bookId]/public returns 401 Unauthorized without session', async () => {
