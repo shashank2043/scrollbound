@@ -16,6 +16,7 @@ interface BookCardProps {
   };
   onAppend: (book: Book) => void;
   onDelete: (book: Book) => void;
+  onSplit?: (book: Book) => void;
 }
 
 export function BookCard({
@@ -24,6 +25,7 @@ export function BookCard({
   novelProgress,
   onAppend,
   onDelete,
+  onSplit,
 }: BookCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -103,6 +105,15 @@ export function BookCard({
                   className="w-full text-left px-3.5 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"
                 >
                   <span>➕</span> Add another PDF to this book
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onSplit?.(book);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2"
+                >
+                  <span>📑</span> {isChaptered ? 'Re-split Chapters' : 'Split into Chapters'}
                 </button>
                 <div className="my-1 border-t border-black/5 dark:border-white/5" />
                 <button

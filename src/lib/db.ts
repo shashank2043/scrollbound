@@ -3,6 +3,7 @@
 // and Aspect-Oriented Programming (AOP) for cross-cutting logging & timing.
 
 import { Block, Book, Bookmark, Chunk, ExportData, Progress, ReaderSettings, CustomTheme } from './types';
+import { ChapterSuggestion, sliceBlocksForChapters } from './chapterDetector';
 import {
   recordSyncAction,
   markSyncActionStatus,
@@ -326,6 +327,141 @@ export function calculateNovelProgress(
     totalChapters,
   };
 }
+
+/**
+ * Retrieve all reconstructed text blocks for an existing novel (whether single or chaptered)
+ */
+export async function getAllBlocksForBook(bookId: string): Promise<Block[]> {
+  const allCached = getCachedBooks();
+  const childChapters = allCached
+    .filter((b) => b.parentId === bookId)
+    .sort((a, b) => (a.chapterIndex ?? 0) - (b.chapterIndex ?? 0));
+
+  if (childChapters.length > 0) {
+    const chapterBlocksList: Block[] = [];
+    for (const chap of childChapters) {
+      const res = await fetch(`/api/books/${chap.id}/chunks`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.chunks)) {
+          const sorted = data.chunks.sort(
+            (a: { index: number }, b: { index: number }) => a.index - b.index
+          );
+          for (const c of sorted) {
+            chapterBlocksList.push(...c.blocks);
+          }
+        }
+      }
+    }
+    return chapterBlocksList.map((b, idx) => ({ ...b, id: idx }));
+  }
+
+  // Standalone book: fetch its chunks directly
+  const res = await fetch(`/api/books/${bookId}/chunks`);
+  if (!res.ok) {
+    throw new Error('Failed to load book content.');
+  }
+  const data = await res.json();
+  if (!Array.isArray(data.chunks)) {
+    return [];
+  }
+  const sorted = data.chunks.sort(
+    (a: { index: number }, b: { index: number }) => a.index - b.index
+  );
+  const blocks: Block[] = [];
+  for (const c of sorted) {
+    blocks.push(...c.blocks);
+  }
+  return blocks.map((b, idx) => ({ ...b, id: idx }));
+}
+
+/**
+ * Split an already uploaded novel into multiple linked chapters.
+ */
+async function splitExistingBookCore(
+  parentBook: Book,
+  blocks: Block[],
+  suggestions: ChapterSuggestion[]
+): Promise<void> {
+  const sliced = sliceBlocksForChapters(blocks, suggestions);
+  const chapterIds = suggestions.map(
+    (_, idx) =>
+      `chap_${parentBook.id}_${idx + 1}_${Math.random().toString(36).substring(2, 6)}`
+  );
+
+  const chaptersPayload: any[] = [];
+  const newChapterBooks: Book[] = [];
+
+  for (let idx = 0; idx < sliced.length; idx++) {
+    const { chapter, blocks: chapterBlocks } = sliced[idx];
+    const chId = chapterIds[idx];
+    const chunks = createChunksFromBlocks(chId, chapterBlocks);
+
+    const chapterBook: Book = {
+      id: chId,
+      title: `${parentBook.title} - ${chapter.title}`,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      blockCount: chapterBlocks.length,
+      chunkCount: chunks.length,
+      parentId: parentBook.id,
+      chapterIndex: idx,
+      chapterTitle: chapter.title,
+      totalChapters: suggestions.length,
+      prevBookId: idx > 0 ? chapterIds[idx - 1] : null,
+      nextBookId: idx < suggestions.length - 1 ? chapterIds[idx + 1] : null,
+    };
+
+    // Pre-cache in memory & session storage
+    for (const c of chunks) {
+      chunkMemoryCache.set(`${chId}:${c.index}`, c);
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem(
+            `scrollbound_chunk_${chId}_${c.index}`,
+            JSON.stringify(c)
+          );
+        } catch {}
+      }
+    }
+
+    newChapterBooks.push(chapterBook);
+    chaptersPayload.push({
+      ...chapterBook,
+      chunks,
+    });
+  }
+
+  // Optimistically update local cache
+  const cached = getCachedBooks().filter(
+    (b) => b.id !== parentBook.id && b.parentId !== parentBook.id
+  );
+  const updatedParent: Book = {
+    ...parentBook,
+    totalChapters: suggestions.length,
+    updatedAt: Date.now(),
+  };
+  cached.unshift(updatedParent, ...newChapterBooks);
+  setCachedBooks(cached);
+
+  // Send split payload to database in transaction
+  const res = await fetch(`/api/books/${parentBook.id}/split`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chapters: chaptersPayload }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || 'Failed to split novel in database.');
+  }
+}
+
+export const splitExistingBook = aopLogged(
+  'splitExistingBook',
+  undefined,
+  splitExistingBookCore
+);
 
 /**
  * Core Append Book Function

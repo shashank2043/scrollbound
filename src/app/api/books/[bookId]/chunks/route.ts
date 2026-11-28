@@ -7,6 +7,42 @@ interface RouteContext {
   params: Promise<{ bookId: string }>;
 }
 
+export async function GET(request: Request, context: RouteContext) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { bookId } = await context.params;
+
+    const book = await prisma.book.findFirst({
+      where: { id: bookId, userId: user.id },
+    });
+
+    if (!book) {
+      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+    }
+
+    const chunks = await prisma.chunk.findMany({
+      where: { bookId },
+      orderBy: { index: 'asc' },
+    });
+
+    return NextResponse.json({
+      chunks: chunks.map((c) => ({
+        id: c.id,
+        bookId: c.bookId,
+        index: c.index,
+        blocks: c.blocks,
+      })),
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request, context: RouteContext) {
   try {
     const user = await getCurrentUser();

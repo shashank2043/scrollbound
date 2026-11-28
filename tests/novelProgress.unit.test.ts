@@ -126,4 +126,26 @@ describe('Novel Progress & Chapter Navigation Math', () => {
     assert.strictEqual(chapter3.prevBookId, chapter2.id);
     assert.strictEqual(chapter3.nextBookId, null);
   });
+
+  it('correctly maps existing novel reading progress to the corresponding chapter when split', () => {
+    // If a user previously read block 150 of an uploaded continuous book
+    const previousGlobalBlock = 150;
+    const chapters = [chapter1, chapter2, chapter3];
+
+    let accumulated = 0;
+    let targetChapter = chapters[0];
+    let relativeBlock = previousGlobalBlock;
+
+    for (const ch of chapters) {
+      if (previousGlobalBlock >= accumulated && previousGlobalBlock < accumulated + ch.blockCount) {
+        targetChapter = ch;
+        relativeBlock = previousGlobalBlock - accumulated;
+        break;
+      }
+      accumulated += ch.blockCount;
+    }
+
+    assert.strictEqual(targetChapter.id, 'chap_100_2');
+    assert.strictEqual(relativeBlock, 50); // Block 150 is block 50 in chapter 2
+  });
 });

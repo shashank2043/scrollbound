@@ -20,6 +20,7 @@ import { BookCard } from '../components/BookCard';
 import { AddBookModal } from '../components/AddBookModal';
 import { AppendBookModal } from '../components/AppendBookModal';
 import { DeleteConfirmModal } from '../components/DeleteConfirmModal';
+import { SplitBookModal } from '../components/SplitBookModal';
 import { SettingsModal } from '../components/SettingsModal';
 import { BackupModal } from '../components/BackupModal';
 import { CircularProgress } from '../components/CircularProgress';
@@ -47,6 +48,7 @@ export default function LibraryPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [appendBookTarget, setAppendBookTarget] = useState<Book | null>(null);
   const [deleteBookTarget, setDeleteBookTarget] = useState<Book | null>(null);
+  const [splitBookTarget, setSplitBookTarget] = useState<Book | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isBackupOpen, setIsBackupOpen] = useState(false);
 
@@ -221,6 +223,7 @@ export default function LibraryPage() {
                       novelProgress={novelProg}
                       onAppend={(b) => setAppendBookTarget(b)}
                       onDelete={(b) => setDeleteBookTarget(b)}
+                      onSplit={(b) => setSplitBookTarget(b)}
                     />
                   );
                 })}
@@ -235,6 +238,16 @@ export default function LibraryPage() {
           isOpen={isAddOpen}
           onClose={() => setIsAddOpen(false)}
           onBookAdded={() => loadData()}
+        />
+      )}
+
+      {/* Split Novel Modal */}
+      {splitBookTarget && (
+        <SplitBookModal
+          book={splitBookTarget}
+          isOpen={!!splitBookTarget}
+          onClose={() => setSplitBookTarget(null)}
+          onChaptersSplit={() => loadData()}
         />
       )}
 
