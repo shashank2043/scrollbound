@@ -444,6 +444,41 @@ async function splitExistingBookCore(
   cached.unshift(updatedParent, ...newChapterBooks);
   setCachedBooks(cached);
 
+  // Optimistically migrate local bookmarks to matching chapters
+  const localBookmarks = getLocalBookmarks(parentBook.id);
+  if (localBookmarks.length > 0) {
+    for (const bm of localBookmarks) {
+      let accumulated = 0;
+      let targetChapter = newChapterBooks[0];
+      let relativeBlockId = bm.blockId;
+
+      for (const ch of newChapterBooks) {
+        if (
+          bm.blockId >= accumulated &&
+          bm.blockId < accumulated + ch.blockCount
+        ) {
+          targetChapter = ch;
+          relativeBlockId = bm.blockId - accumulated;
+          break;
+        }
+        accumulated += ch.blockCount;
+      }
+
+      if (targetChapter) {
+        const existingChapBms = getLocalBookmarks(targetChapter.id);
+        const updatedChapBms = [
+          ...existingChapBms.filter((b) => b.id !== bm.id),
+          {
+            ...bm,
+            bookId: targetChapter.id,
+            blockId: relativeBlockId,
+          },
+        ];
+        saveLocalBookmarks(targetChapter.id, updatedChapBms);
+      }
+    }
+  }
+
   // Send split payload to database in transaction
   const res = await fetch(`/api/books/${parentBook.id}/split`, {
     method: 'POST',

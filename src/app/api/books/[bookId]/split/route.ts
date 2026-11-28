@@ -28,11 +28,60 @@ export async function POST(request: Request, context: RouteContext) {
         progress: {
           where: { userId: user.id },
         },
+        bookmarks: {
+          where: { userId: user.id },
+        },
       },
     });
 
     if (!parentBook) {
       return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+    }
+
+    // Retrieve any existing child bookmarks and previous chapters in case of re-splitting
+    const existingChildChapters = await prisma.book.findMany({
+      where: { parentId: bookId, userId: user.id },
+      orderBy: { chapterIndex: 'asc' },
+      include: {
+        bookmarks: {
+          where: { userId: user.id },
+        },
+      },
+    });
+
+    // Collect all bookmarks to migrate with their global block coordinates
+    const allBookmarksToMigrate: {
+      id: string;
+      globalBlockId: number;
+      snippet: string;
+      note: string | null;
+      createdAt: Date;
+    }[] = [
+      ...parentBook.bookmarks.map((b) => ({
+        id: b.id,
+        globalBlockId: b.blockId,
+        snippet: b.snippet,
+        note: b.note,
+        createdAt: b.createdAt,
+      })),
+    ];
+
+    for (const ch of existingChildChapters) {
+      let globalOffset = 0;
+      for (const prevCh of existingChildChapters) {
+        if ((prevCh.chapterIndex ?? 0) < (ch.chapterIndex ?? 0)) {
+          globalOffset += prevCh.blockCount;
+        }
+      }
+      for (const cb of ch.bookmarks) {
+        allBookmarksToMigrate.push({
+          id: cb.id,
+          globalBlockId: cb.blockId + globalOffset,
+          snippet: cb.snippet,
+          note: cb.note,
+          createdAt: cb.createdAt,
+        });
+      }
     }
 
     const createdChapters = await prisma.$transaction(
@@ -135,6 +184,46 @@ export async function POST(request: Request, context: RouteContext) {
                 blockId: relativeBlockId,
                 offset: oldProg.offset,
                 percent: chapterPercent,
+              },
+            });
+          }
+        }
+
+        // 6. Migrate user's existing bookmarks to the appropriate chapters
+        for (const bm of allBookmarksToMigrate) {
+          let accumulatedBlocks = 0;
+          let matchedChapter = chapterBooksData[0];
+          let relativeBlockId = bm.globalBlockId;
+
+          for (const ch of chapterBooksData) {
+            if (
+              bm.globalBlockId >= accumulatedBlocks &&
+              bm.globalBlockId < accumulatedBlocks + ch.blockCount
+            ) {
+              matchedChapter = ch;
+              relativeBlockId = bm.globalBlockId - accumulatedBlocks;
+              break;
+            }
+            accumulatedBlocks += ch.blockCount;
+          }
+
+          if (matchedChapter) {
+            await tx.bookmark.upsert({
+              where: { id: bm.id },
+              update: {
+                bookId: matchedChapter.id,
+                blockId: relativeBlockId,
+                snippet: bm.snippet,
+                note: bm.note,
+              },
+              create: {
+                id: bm.id,
+                userId: user.id,
+                bookId: matchedChapter.id,
+                blockId: relativeBlockId,
+                snippet: bm.snippet,
+                note: bm.note,
+                createdAt: bm.createdAt,
               },
             });
           }

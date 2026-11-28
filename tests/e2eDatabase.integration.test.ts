@@ -141,7 +141,7 @@ describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () =>
     assert.strictEqual(getChunksData.chunks.length, chunks.length);
   });
 
-  it('records reading progress at block 150 on the novel', async () => {
+  it('records reading progress at block 150 and creates bookmarks before split', async () => {
     await prisma.progress.upsert({
       where: {
         userId_bookId: {
@@ -162,6 +162,41 @@ describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () =>
         percent: 25,
       },
     });
+
+    // Create 3 bookmarks at different block locations before split
+    await prisma.bookmark.createMany({
+      data: [
+        {
+          id: `bm_test_1_${Date.now()}`,
+          userId: testUserId,
+          bookId: parentBookId,
+          blockId: 25,
+          snippet: 'Early discovery in chapter 1',
+          note: 'Key plot point',
+        },
+        {
+          id: `bm_test_2_${Date.now()}`,
+          userId: testUserId,
+          bookId: parentBookId,
+          blockId: 150,
+          snippet: 'Grid swung his greatsword',
+          note: 'Epic battle moment',
+        },
+        {
+          id: `bm_test_3_${Date.now()}`,
+          userId: testUserId,
+          bookId: parentBookId,
+          blockId: 320,
+          snippet: 'The realm shook with thunder',
+          note: 'Climactic scene',
+        },
+      ],
+    });
+
+    const bms = await prisma.bookmark.findMany({
+      where: { userId: testUserId, bookId: parentBookId },
+    });
+    assert.strictEqual(bms.length, 3, 'Must have 3 pre-split bookmarks created');
 
     const prog = await prisma.progress.findUnique({
       where: {
@@ -254,6 +289,43 @@ describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () =>
     });
     assert.ok(migratedProgress);
     assert.strictEqual(migratedProgress!.blockId, 30);
+
+    // Verify bookmarks migrated intact to their respective chapters
+    const chapter1 = await prisma.book.findFirst({
+      where: { parentId: parentBookId, chapterIndex: 0 },
+    });
+    const chapter6 = await prisma.book.findFirst({
+      where: { parentId: parentBookId, chapterIndex: 5 },
+    });
+    assert.ok(chapter1);
+    assert.ok(chapter6);
+
+    // Bookmark 1: was at block 25 on parent -> now at block 25 on Chapter 1
+    const bm1 = await prisma.bookmark.findFirst({
+      where: { userId: testUserId, bookId: chapter1!.id },
+    });
+    assert.ok(bm1, 'Bookmark 1 must be migrated to Chapter 1');
+    assert.strictEqual(bm1!.blockId, 25);
+    assert.strictEqual(bm1!.snippet, 'Early discovery in chapter 1');
+    assert.strictEqual(bm1!.note, 'Key plot point');
+
+    // Bookmark 2: was at block 150 on parent -> now at block 30 on Chapter 3
+    const bm2 = await prisma.bookmark.findFirst({
+      where: { userId: testUserId, bookId: chapter3!.id },
+    });
+    assert.ok(bm2, 'Bookmark 2 must be migrated to Chapter 3');
+    assert.strictEqual(bm2!.blockId, 30);
+    assert.strictEqual(bm2!.snippet, 'Grid swung his greatsword');
+    assert.strictEqual(bm2!.note, 'Epic battle moment');
+
+    // Bookmark 3: was at block 320 on parent -> now at block 20 on Chapter 6
+    const bm3 = await prisma.bookmark.findFirst({
+      where: { userId: testUserId, bookId: chapter6!.id },
+    });
+    assert.ok(bm3, 'Bookmark 3 must be migrated to Chapter 6');
+    assert.strictEqual(bm3!.blockId, 20);
+    assert.strictEqual(bm3!.snippet, 'The realm shook with thunder');
+    assert.strictEqual(bm3!.note, 'Climactic scene');
   });
 
   it('fetches library novels via GET /api/books backend route and verifies composite metadata', async () => {
