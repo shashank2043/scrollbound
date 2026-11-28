@@ -3,8 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { isAdmin } from '@/lib/admin';
 
-export const dynamic = 'force-dynamic';
-
 /**
  * GET /api/admin/stats
  * Admin dashboard analytics: user tracking, reading activity, public book popularity,
