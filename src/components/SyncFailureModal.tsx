@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { AlertTriangle, Check, RefreshCw } from 'lucide-react';
 import {
   SyncLogEntry,
   subscribeTerminalFailure,
@@ -121,8 +122,8 @@ export function SyncFailureModal() {
       >
         {/* Header */}
         <div className="flex items-center gap-3 pb-3 border-b border-black/10 dark:border-white/10">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center text-xl shrink-0">
-            ⚠️
+          <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-500 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
           </div>
           <div>
             <h3 className="font-bold text-base leading-tight">
@@ -155,7 +156,7 @@ export function SyncFailureModal() {
           {/* Impact Warning */}
           <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 space-y-1 leading-relaxed">
             <div className="font-bold flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
-              <span>⚠️</span>
+              <AlertTriangle className="w-3.5 h-3.5" />
               <span>Potential Impact:</span>
             </div>
             <p className="text-[11px] opacity-90">
@@ -179,7 +180,7 @@ export function SyncFailureModal() {
 
           {isSuccess && (
             <div className="py-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-bold text-center text-xs flex items-center justify-center gap-2">
-              <span>✓</span>
+              <Check className="w-4 h-4 text-emerald-500" />
               <span>Cloud upload successful! Synchronized.</span>
             </div>
           )}
@@ -199,7 +200,7 @@ export function SyncFailureModal() {
               className="flex-1 py-2.5 px-3 rounded-xl font-bold text-xs text-white shadow transition flex items-center justify-center gap-1.5"
               style={{ backgroundColor: 'var(--sb-accent, #2563eb)' }}
             >
-              <span>🔄</span>
+              <RefreshCw className="w-3.5 h-3.5" />
               <span>Retry in Foreground</span>
             </button>
             <button

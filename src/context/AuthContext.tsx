@@ -9,7 +9,12 @@ export interface AuthUser {
   email: string;
   name: string | null;
   image?: string | null;
+  createdAt?: string | Date;
   settings?: unknown;
+  _count?: {
+    books: number;
+    bookmarks: number;
+  };
 }
 
 interface AuthContextType {
@@ -19,6 +24,7 @@ interface AuthContextType {
   register: (email: string, password: string, name?: string) => Promise<{ success: boolean; error?: string }>;
   signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<{ success: boolean; error?: string }>;
   refreshUser: () => Promise<void>;
   openAuthModal: (mode?: 'login' | 'register') => void;
   closeAuthModal: () => void;
@@ -195,10 +201,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         localStorage.removeItem(AUTH_CACHE_KEY);
       } catch {}
-      await authClient.signOut();
+      // Clear user state immediately for instant responsive feedback on mobile & desktop
       setUser(null);
+      await authClient.signOut();
     } catch {
       setUser(null);
+    }
+  };
+
+  const deleteAccount = async () => {
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return { success: false, error: data.error || 'Failed to delete account' };
+      }
+
+      // Clear all local client storage to leave zero residual data
+      try {
+        localStorage.removeItem(AUTH_CACHE_KEY);
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('scrollbound_') || key.startsWith('sb_'))) {
+            keysToRemove.push(key);
+          }
+        }
+        for (const k of keysToRemove) {
+          localStorage.removeItem(k);
+        }
+      } catch {}
+
+      setUser(null);
+      try {
+        await authClient.signOut();
+      } catch {}
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to delete account';
+      return { success: false, error: msg };
     }
   };
 
@@ -220,6 +266,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         signInWithGoogle,
         logout,
+        deleteAccount,
         refreshUser: checkAuth,
         openAuthModal,
         closeAuthModal,

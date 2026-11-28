@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { BookOpen, Split, Plus, Trash2 } from 'lucide-react';
 import { Block } from '../lib/types';
 import {
   ChapterSuggestion,
@@ -83,24 +84,26 @@ export function ChapterSplitReview({
         <button
           type="button"
           onClick={() => setSplitMode('single')}
-          className={`py-2 px-3 rounded-lg transition text-center ${
+          className={`py-2 px-3 rounded-lg transition text-center flex items-center justify-center gap-1.5 ${
             splitMode === 'single'
               ? 'bg-blue-600 text-white shadow-sm font-semibold'
               : 'opacity-70 hover:opacity-100'
           }`}
         >
-          📖 Single Book ({blocks.length} blocks)
+          <BookOpen className="w-4 h-4" />
+          <span>Single Book ({blocks.length} blocks)</span>
         </button>
         <button
           type="button"
           onClick={() => setSplitMode('split')}
-          className={`py-2 px-3 rounded-lg transition text-center ${
+          className={`py-2 px-3 rounded-lg transition text-center flex items-center justify-center gap-1.5 ${
             splitMode === 'split'
               ? 'bg-blue-600 text-white shadow-sm font-semibold'
               : 'opacity-70 hover:opacity-100'
           }`}
         >
-          📑 Split into Chapters ({suggestions.length})
+          <Split className="w-4 h-4" />
+          <span>Split into Chapters ({suggestions.length})</span>
         </button>
       </div>
 
@@ -151,7 +154,7 @@ export function ChapterSplitReview({
               onClick={() => setIsAddingCut(!isAddingCut)}
               className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-semibold"
             >
-              <span>➕</span>
+              <Plus className="w-3.5 h-3.5" />
               <span>Add Breakpoint</span>
             </button>
           </div>
@@ -224,7 +227,7 @@ export function ChapterSplitReview({
                         className="text-red-500 hover:text-red-600 p-1 rounded opacity-70 hover:opacity-100 text-xs shrink-0"
                         title="Delete and merge with adjacent chapter"
                       >
-                        🗑️
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     )}
                   </div>

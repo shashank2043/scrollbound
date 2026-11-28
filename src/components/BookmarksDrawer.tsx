@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Bookmark as BookmarkIcon, X, Pin, BookmarkPlus, FileText, Trash2 } from 'lucide-react';
 import { Bookmark } from '../lib/types';
 
 interface BookmarksDrawerProps {
@@ -65,17 +66,17 @@ export function BookmarksDrawer({
         {/* Drawer Header */}
         <div className="flex items-center justify-between p-4 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🔖</span>
+            <BookmarkIcon className="w-5 h-5 text-amber-500" />
             <h3 className="font-bold text-base tracking-tight font-serif">
               Bookmarks ({bookmarks.length})
             </h3>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg font-bold p-1 rounded"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded"
             aria-label="Close bookmarks"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -88,7 +89,7 @@ export function BookmarksDrawer({
               className="w-full py-2 px-3 text-xs font-semibold rounded-xl text-white transition flex items-center justify-center gap-2 shadow disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ backgroundColor: 'var(--sb-accent, #2563eb)' }}
             >
-              <span>📌</span>
+              <Pin className="w-3.5 h-3.5" />
               <span>
                 {isCurrentBookmarked
                   ? 'Current block already bookmarked'
@@ -128,7 +129,7 @@ export function BookmarksDrawer({
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {bookmarks.length === 0 ? (
             <div className="py-16 text-center text-xs opacity-60">
-              <div className="text-3xl mb-2 opacity-50">📑</div>
+              <BookmarkPlus className="w-8 h-8 mx-auto mb-2 opacity-50" />
               No bookmarks yet.
               <div className="mt-1">
                 Tap on any paragraph or click the button above to add one.
@@ -200,8 +201,9 @@ export function BookmarksDrawer({
                       title="Click to edit note"
                     >
                       {bm.note ? (
-                        <span className="font-medium text-amber-600 dark:text-amber-400">
-                          📝 {bm.note}
+                        <span className="font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          <FileText className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{bm.note}</span>
                         </span>
                       ) : (
                         <span className="opacity-50 italic">+ Add note</span>
@@ -213,7 +215,7 @@ export function BookmarksDrawer({
                       title="Delete bookmark"
                       aria-label="Delete bookmark"
                     >
-                      🗑️
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 )}

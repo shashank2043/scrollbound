@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Bookmark, Settings } from 'lucide-react';
 
 interface ReaderToolbarProps {
   title: string;
@@ -178,7 +179,7 @@ export function ReaderToolbar({
                 title="Bookmarks"
                 aria-label="Bookmarks"
               >
-                <span>🔖</span>
+                <Bookmark className="w-4 h-4" />
                 {bookmarkCount > 0 && (
                   <span
                     className="px-1.5 py-0.2 text-[10px] font-bold rounded-full text-white"
@@ -195,7 +196,7 @@ export function ReaderToolbar({
                 title="Appearance Settings"
                 aria-label="Appearance Settings"
               >
-                <span>⚙️</span>
+                <Settings className="w-4 h-4" />
               </button>
             </div>
           </div>

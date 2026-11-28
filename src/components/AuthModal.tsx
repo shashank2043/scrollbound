@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Scroll, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export function AuthModal() {
@@ -88,17 +89,17 @@ export function AuthModal() {
       >
         <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/10">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">📜</span>
+            <Scroll className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             <h2 className="text-xl font-bold font-serif">
               {mode === 'login' ? 'Sign In to Scrollbound' : 'Create Account'}
             </h2>
           </div>
           <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg font-bold p-1 rounded"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded"
             aria-label="Close"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 

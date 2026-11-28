@@ -28,6 +28,7 @@ import {
 import { POST as settingsPost } from '../src/app/api/settings/route';
 import { POST as themesPost, DELETE as themesDelete } from '../src/app/api/settings/themes/route';
 import { GET as syncGet, POST as syncPost } from '../src/app/api/sync/route';
+import { GET as profileGet, DELETE as profileDelete } from '../src/app/api/auth/profile/route';
 
 // Node.js test runner
 let totalTests = 0;
@@ -266,6 +267,22 @@ export async function runBackendUnitTests() {
       body: JSON.stringify({ actions: [] }),
     });
     const res = await syncPost(req);
+    assertEquals(res.status, 401);
+  });
+
+  await test('GET /api/auth/profile returns 401 Unauthorized without session', async () => {
+    const req = new Request('http://localhost:3000/api/auth/profile', {
+      method: 'GET',
+    });
+    const res = await profileGet(req);
+    assertEquals(res.status, 401);
+  });
+
+  await test('DELETE /api/auth/profile returns 401 Unauthorized without session', async () => {
+    const req = new Request('http://localhost:3000/api/auth/profile', {
+      method: 'DELETE',
+    });
+    const res = await profileDelete(req);
     assertEquals(res.status, 401);
   });
 

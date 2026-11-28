@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import { Book, Block } from '../lib/types';
 import {
   ChapterSuggestion,
@@ -104,10 +105,10 @@ export function SplitBookModal({
           {!isSaving && !isLoadingBlocks && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl font-bold p-1 rounded"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded"
               aria-label="Close"
             >
-              ✕
+              <X className="w-5 h-5" />
             </button>
           )}
         </div>

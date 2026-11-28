@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { Library, BookOpen, Plus } from 'lucide-react';
 import { Book, Progress } from '../lib/types';
 import {
   getAllBooks,
@@ -164,7 +165,9 @@ export default function LibraryPage() {
           </div>
         ) : !user ? (
           <div className="text-center py-20 px-4 max-w-md mx-auto">
-            <div className="text-6xl mb-6 select-none">📚</div>
+            <div className="w-16 h-16 mx-auto mb-6 flex items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-sm">
+              <Library className="w-8 h-8" />
+            </div>
             <h2 className="text-2xl font-bold tracking-tight mb-2">
               Welcome to Scrollbound
             </h2>
@@ -188,7 +191,9 @@ export default function LibraryPage() {
           </div>
         ) : books.length === 0 ? (
           <div className="text-center py-20 px-4 max-w-md mx-auto">
-            <div className="text-6xl mb-6 select-none">📖</div>
+            <div className="w-16 h-16 mx-auto mb-6 flex items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-sm">
+              <BookOpen className="w-8 h-8" />
+            </div>
             <h2 className="text-2xl font-bold tracking-tight mb-2">
               Your Library is Empty
             </h2>
@@ -199,7 +204,7 @@ export default function LibraryPage() {
               onClick={() => setIsAddOpen(true)}
               className="px-6 py-3 rounded-xl font-medium bg-blue-600 hover:bg-blue-500 text-white shadow-sm transition inline-flex items-center gap-2"
             >
-              <span>➕</span>
+              <Plus className="w-4 h-4" />
               <span>Add Your First Novel</span>
             </button>
           </div>

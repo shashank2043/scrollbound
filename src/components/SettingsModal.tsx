@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Settings, X, RefreshCw, RotateCcw, Check, Star } from 'lucide-react';
 import { CustomTheme, FontFamily, ReaderSettings } from '../lib/types';
 import { FONT_FAMILIES } from '../lib/theme';
 import { ThemePicker } from './ThemePicker';
@@ -86,14 +87,15 @@ export function SettingsModal({
       >
         <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/10">
           <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
-            <span>⚙️</span> Appearance & Typography
+            <Settings className="w-5 h-5 text-blue-500" />
+            <span>Appearance & Typography</span>
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl font-bold p-1 rounded"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded"
             aria-label="Close"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -236,7 +238,7 @@ export function SettingsModal({
           <div className="border-t border-black/10 dark:border-white/10 pt-4">
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-semibold uppercase tracking-wider opacity-60 flex items-center gap-1.5">
-                <span>🔄</span>
+                <RefreshCw className="w-3.5 h-3.5" />
                 <span>Cloud & Local Sync (Last 50 Steps)</span>
               </label>
               <button
@@ -253,7 +255,7 @@ export function SettingsModal({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="font-semibold text-xs flex items-center gap-1.5">
-                    <span>🔁</span>
+                    <RotateCcw className="w-3.5 h-3.5" />
                     <span>Auto Background Sync</span>
                   </div>
                   <div className="text-[11px] opacity-60">
@@ -293,12 +295,13 @@ export function SettingsModal({
                             : 'border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 opacity-80'
                         }`}
                       >
-                        {mins}m {mins === 5 ? '★' : ''}
+                        {mins}m {mins === 5 ? <Star className="w-3 h-3 inline fill-current text-amber-500 mb-0.5" /> : ''}
                       </button>
                     ))}
                   </div>
-                  <div className="text-[10px] opacity-50 mt-1.5">
-                    ★ 5 minutes is the recommended default for low battery & data usage.
+                  <div className="text-[10px] opacity-50 mt-1.5 flex items-center gap-1">
+                    <Star className="w-3 h-3 fill-current text-amber-500 inline shrink-0" />
+                    <span>5 minutes is the recommended default for low battery & data usage.</span>
                   </div>
                 </div>
               )}
@@ -356,15 +359,11 @@ export function SettingsModal({
                         className="flex items-center justify-between p-1.5 rounded-lg bg-black/5 dark:bg-white/5 text-[10px]"
                       >
                         <div className="flex items-center gap-1.5 truncate">
-                          <span
-                            className={
-                              entry.status === 'synced'
-                                ? 'text-emerald-500'
-                                : 'text-amber-500'
-                            }
-                          >
-                            {entry.status === 'synced' ? '✓' : '⟳'}
-                          </span>
+                          {entry.status === 'synced' ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                          ) : (
+                            <RefreshCw className="w-3.5 h-3.5 text-amber-500 animate-spin" />
+                          )}
                           <span className="font-semibold font-sans">
                             {formatActionName(entry.action)}
                           </span>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, use, Suspense } from 'react';
 import Link from 'next/link';
+import { BookOpen } from 'lucide-react';
 import { Book, Bookmark } from '../../../lib/types';
 import {
   getBook,
@@ -153,7 +154,9 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4 font-sans">
         <div className="text-center max-w-md space-y-4">
-          <div className="text-4xl">📚</div>
+          <div className="w-12 h-12 mx-auto flex items-center justify-center rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+            <BookOpen className="w-6 h-6" />
+          </div>
           <h2 className="text-xl font-bold">Book Not Found</h2>
           <p className="text-sm opacity-70">
             {error || 'This book does not exist in your local library or may have been deleted.'}

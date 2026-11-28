@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { Bookmark as BookmarkIcon, BookmarkPlus } from 'lucide-react';
 import { Block, Book, Bookmark, Progress, ReaderSettings, Chunk } from '../lib/types';
 import { getChunk, CHUNK_SIZE } from '../lib/db';
 
@@ -392,7 +393,11 @@ export function ReaderContent({
                   title={isBookmarked ? 'Remove bookmark' : 'Bookmark this section'}
                   aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark this section'}
                 >
-                  {isBookmarked ? '🔖' : '📑'}
+                  {isBookmarked ? (
+                    <BookmarkIcon className="w-4 h-4 fill-current text-amber-500" />
+                  ) : (
+                    <BookmarkPlus className="w-4 h-4" />
+                  )}
                 </button>
               </div>
             );
@@ -434,14 +439,14 @@ export function ReaderContent({
                 aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark paragraph'}
               >
                 {isBookmarked ? (
-                  <span>🔖</span>
+                  <BookmarkIcon className="w-4 h-4 fill-current text-amber-500" />
                 ) : isActive ? (
                   <span className="flex items-center gap-1 text-[11px]">
-                    <span>📑</span>
+                    <BookmarkPlus className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Bookmark</span>
                   </span>
                 ) : (
-                  <span>📑</span>
+                  <BookmarkPlus className="w-3.5 h-3.5" />
                 )}
               </button>
             </div>

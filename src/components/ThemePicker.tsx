@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { X, Palette, AlertTriangle, Check } from 'lucide-react';
 import { CustomTheme, ReaderSettings } from '../lib/types';
 import {
   PRESET_THEMES,
@@ -125,7 +126,7 @@ export function ThemePicker({
                     className="text-gray-400 hover:text-red-500 p-1 transition"
                     title="Delete theme"
                   >
-                    ✕
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
               );
@@ -140,7 +141,8 @@ export function ThemePicker({
           onClick={() => setIsCreating(true)}
           className="w-full py-2 px-3 text-xs font-medium rounded-xl border border-dashed border-gray-400 dark:border-gray-600 hover:border-blue-500 hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center justify-center gap-1.5"
         >
-          <span>🎨</span> Create Custom Color Theme
+          <Palette className="w-4 h-4" />
+          <span>Create Custom Color Theme</span>
         </button>
       ) : (
         /* Create Custom Theme Form */
@@ -151,7 +153,7 @@ export function ThemePicker({
               onClick={() => setIsCreating(false)}
               className="text-gray-400 hover:text-gray-600 p-1"
             >
-              ✕
+              <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
@@ -215,7 +217,11 @@ export function ThemePicker({
                 : 'bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400'
             }`}
           >
-            <span>{isPoorContrast ? '⚠️' : '✓'}</span>
+            {isPoorContrast ? (
+              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-500" />
+            ) : (
+              <Check className="w-4 h-4 shrink-0 text-green-500" />
+            )}
             <div className="flex-1">
               <span className="font-semibold">
                 Contrast Ratio: {contrast.toFixed(2)}:1

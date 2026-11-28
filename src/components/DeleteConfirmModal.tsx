@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { Trash2 } from 'lucide-react';
 import { Book } from '../lib/types';
 
 interface DeleteConfirmModalProps {
@@ -29,8 +30,8 @@ export function DeleteConfirmModal({
         }}
       >
         <div className="text-center py-2">
-          <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center text-xl mx-auto mb-3">
-            🗑️
+          <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center mx-auto mb-3">
+            <Trash2 className="w-6 h-6" />
           </div>
           <h3 className="text-lg font-bold">Delete Book</h3>
           <p className="text-sm opacity-70 mt-2 px-2">

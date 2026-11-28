@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { HardDrive, X } from 'lucide-react';
 import { exportAllData, importAllData, requestPersistentStorage } from '../lib/db';
 import { ExportData, ReaderSettings } from '../lib/types';
 
@@ -81,14 +82,15 @@ export function BackupModal({
       >
         <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/10">
           <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
-            <span>💾</span> Data Backup & Safety
+            <HardDrive className="w-5 h-5 text-blue-500" />
+            <span>Data Backup & Safety</span>
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl font-bold p-1 rounded"
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded"
             aria-label="Close"
           >
-            ✕
+            <X className="w-5 h-5" />
           </button>
         </div>
 

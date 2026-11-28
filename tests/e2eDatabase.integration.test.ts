@@ -9,6 +9,7 @@ import { POST as createBookRoute, GET as getBooksRoute } from '../src/app/api/bo
 import { DELETE as deleteBookRoute } from '../src/app/api/books/[bookId]/route';
 import { GET as getChunksRoute, POST as postChunksRoute } from '../src/app/api/books/[bookId]/chunks/route';
 import { POST as splitRoute } from '../src/app/api/books/[bookId]/split/route';
+import { GET as getProfileRoute, DELETE as deleteProfileRoute } from '../src/app/api/auth/profile/route';
 
 describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () => {
   let testUserId: string;
@@ -369,5 +370,42 @@ describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () =>
     // Verify chunks are gone
     const chunks = await prisma.chunk.findMany({ where: { bookId: parentBookId } });
     assert.strictEqual(chunks.length, 0);
+  });
+
+  it('retrieves user profile and account details via GET /api/auth/profile', async () => {
+    const profileReq = makeRequest('http://localhost:3000/api/auth/profile', 'GET');
+    const profileRes = await getProfileRoute(profileReq);
+    assert.strictEqual(profileRes.status, 200, 'GET /api/auth/profile must return 200');
+
+    const data = (await profileRes.json()) as {
+      user: {
+        id: string;
+        email: string;
+        name: string;
+        _count?: { books: number; bookmarks: number };
+      };
+    };
+    assert.ok(data.user);
+    assert.strictEqual(data.user.id, testUserId);
+    assert.strictEqual(data.user.email, testEmail);
+    assert.strictEqual(data.user._count?.books, 0);
+  });
+
+  it('permanently deletes user account and leaves zero database residue via DELETE /api/auth/profile', async () => {
+    const deleteProfileReq = makeRequest('http://localhost:3000/api/auth/profile', 'DELETE');
+    const deleteProfileRes = await deleteProfileRoute(deleteProfileReq);
+    assert.strictEqual(deleteProfileRes.status, 200, 'DELETE /api/auth/profile must return 200');
+
+    // Confirm user is deleted
+    const userInDb = await prisma.user.findUnique({ where: { id: testUserId } });
+    assert.strictEqual(userInDb, null, 'User record must be completely deleted from PostgreSQL');
+
+    // Confirm zero sessions remain
+    const sessions = await prisma.session.findMany({ where: { userId: testUserId } });
+    assert.strictEqual(sessions.length, 0, 'Zero session residue must remain');
+
+    // Confirm zero books remain
+    const books = await prisma.book.findMany({ where: { userId: testUserId } });
+    assert.strictEqual(books.length, 0, 'Zero book residue must remain');
   });
 });

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import { X, FileText, FilePlus } from 'lucide-react';
 import { extractPdfBlocks, ExtractProgress } from '../lib/pdf/extract';
 import { appendToBook } from '../lib/db';
 import { Book } from '../lib/types';
@@ -99,10 +100,10 @@ export function AppendBookModal({
           {!isProcessing && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xl font-bold p-1 rounded"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded"
               aria-label="Close"
             >
-              ✕
+              <X className="w-5 h-5" />
             </button>
           )}
         </div>
@@ -135,7 +136,7 @@ export function AppendBookModal({
                   />
                   {file ? (
                     <div>
-                      <div className="text-3xl mb-1">📄</div>
+                      <FileText className="w-8 h-8 mx-auto mb-1 text-blue-500" />
                       <div className="font-medium text-sm truncate max-w-sm mx-auto">
                         {file.name}
                       </div>
@@ -145,7 +146,7 @@ export function AppendBookModal({
                     </div>
                   ) : (
                     <div>
-                      <div className="text-3xl mb-1 opacity-70">➕</div>
+                      <FilePlus className="w-8 h-8 mx-auto mb-1 text-blue-500/70" />
                       <div className="font-medium text-sm">Pick the PDF to append</div>
                       <div className="text-xs opacity-60 mt-1">
                         Blocks will be appended after existing content. Existing bookmarks and progress remain valid.
