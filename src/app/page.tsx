@@ -11,6 +11,7 @@ import {
   getCachedBooks,
   getCachedProgressMap,
   initSyncEngine,
+  calculateNovelProgress,
 } from '../lib/db';
 import { useSettings } from '../hooks/useSettings';
 import { useAuth } from '../context/AuthContext';
@@ -204,19 +205,25 @@ export default function LibraryPage() {
           <div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-lg font-semibold tracking-tight opacity-80">
-                Your Novels ({books.length})
+                Your Novels ({books.filter((b) => !b.parentId).length})
               </h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-              {books.map((book) => (
-                <BookCard
-                  key={book.id}
-                  book={book}
-                  progress={progressMap[book.id]}
-                  onAppend={(b) => setAppendBookTarget(b)}
-                  onDelete={(b) => setDeleteBookTarget(b)}
-                />
-              ))}
+              {books
+                .filter((b) => !b.parentId)
+                .map((book) => {
+                  const novelProg = calculateNovelProgress(book, books, progressMap);
+                  return (
+                    <BookCard
+                      key={book.id}
+                      book={book}
+                      progress={progressMap[book.id]}
+                      novelProgress={novelProg}
+                      onAppend={(b) => setAppendBookTarget(b)}
+                      onDelete={(b) => setDeleteBookTarget(b)}
+                    />
+                  );
+                })}
             </div>
           </div>
         )}

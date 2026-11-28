@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import { Block, Book, Bookmark, Progress, ReaderSettings, Chunk } from '../lib/types';
 import { getChunk, CHUNK_SIZE } from '../lib/db';
 
@@ -457,9 +458,25 @@ export function ReaderContent({
           </div>
         )}
         {maxChunkIdx >= book.chunkCount - 1 && allBlocks.length > 0 && (
-          <div className="text-xs opacity-40 font-mono py-8 text-center border-t border-black/10 dark:border-white/10 mt-8 max-w-xs mx-auto">
-            — End of Novel —
-          </div>
+          book.nextBookId ? (
+            <div className="py-10 text-center space-y-3 border-t border-black/10 dark:border-white/10 mt-8 max-w-sm mx-auto">
+              <div className="text-xs opacity-50 font-mono">
+                — End of {book.chapterTitle || `Chapter ${(book.chapterIndex ?? 0) + 1}`} —
+              </div>
+              <Link
+                href={`/read/${book.nextBookId}`}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white shadow transition hover:opacity-90 active:scale-[0.98]"
+                style={{ backgroundColor: 'var(--sb-accent, #2563eb)' }}
+              >
+                <span>Read Next Chapter</span>
+                <span>→</span>
+              </Link>
+            </div>
+          ) : (
+            <div className="text-xs opacity-40 font-mono py-8 text-center border-t border-black/10 dark:border-white/10 mt-8 max-w-xs mx-auto">
+              — End of Novel —
+            </div>
+          )
         )}
       </div>
     </div>

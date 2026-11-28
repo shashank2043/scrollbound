@@ -177,6 +177,11 @@ function ReaderView({ params }: { params: Promise<{ bookId: string }> }) {
         title={book.title}
         percent={percent}
         bookmarkCount={bookmarks.length}
+        chapterTitle={book.chapterTitle}
+        chapterIndex={book.chapterIndex}
+        totalChapters={book.totalChapters}
+        prevBookId={book.prevBookId}
+        nextBookId={book.nextBookId}
         onOpenBookmarks={() => setIsBookmarksOpen(true)}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onLeave={flushProgress}

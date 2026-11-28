@@ -7,6 +7,11 @@ interface ReaderToolbarProps {
   title: string;
   percent: number;
   bookmarkCount: number;
+  chapterTitle?: string | null;
+  chapterIndex?: number | null;
+  totalChapters?: number | null;
+  prevBookId?: string | null;
+  nextBookId?: string | null;
   onOpenBookmarks: () => void;
   onOpenSettings: () => void;
   onLeave?: () => void;
@@ -16,6 +21,11 @@ export function ReaderToolbar({
   title,
   percent,
   bookmarkCount,
+  chapterTitle,
+  chapterIndex,
+  totalChapters,
+  prevBookId,
+  nextBookId,
   onOpenBookmarks,
   onOpenSettings,
   onLeave,
@@ -118,14 +128,46 @@ export function ReaderToolbar({
               <span className="hidden sm:inline">Library</span>
             </Link>
 
-            {/* Book Title & Progress */}
-            <div className="flex-1 min-w-0 text-center px-2">
-              <h2 className="text-xs sm:text-sm font-semibold truncate font-serif">
-                {title}
-              </h2>
-              <div className="text-[10px] opacity-60 font-mono">
-                {Math.round(percent)}% read
+            {/* Book Title & Chapter Navigation */}
+            <div className="flex-1 min-w-0 text-center px-2 flex items-center justify-center gap-2">
+              {prevBookId && (
+                <Link
+                  href={`/read/${prevBookId}`}
+                  onClick={() => onLeave?.()}
+                  className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-xs font-semibold shrink-0 transition"
+                  title="Previous Chapter"
+                  aria-label="Previous Chapter"
+                >
+                  ◀
+                </Link>
+              )}
+
+              <div className="min-w-0">
+                <h2 className="text-xs sm:text-sm font-semibold truncate font-serif">
+                  {title}
+                </h2>
+                <div className="text-[10px] opacity-60 font-mono truncate">
+                  {typeof chapterIndex === 'number' && (
+                    <span className="font-semibold mr-1.5 text-blue-600 dark:text-blue-400">
+                      Ch. {chapterIndex + 1}
+                      {totalChapters ? `/${totalChapters}` : ''}
+                    </span>
+                  )}
+                  <span>{Math.round(percent)}% read</span>
+                </div>
               </div>
+
+              {nextBookId && (
+                <Link
+                  href={`/read/${nextBookId}`}
+                  onClick={() => onLeave?.()}
+                  className="p-1 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 text-xs font-semibold shrink-0 transition"
+                  title="Next Chapter"
+                  aria-label="Next Chapter"
+                >
+                  ▶
+                </Link>
+              )}
             </div>
 
             {/* Right actions: Bookmarks & Settings */}

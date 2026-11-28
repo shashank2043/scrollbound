@@ -14,6 +14,12 @@ export interface Book {
   blockCount: number;
   chunkCount: number;
   lastReadAt?: number;
+  parentId?: string | null;
+  chapterIndex?: number | null;
+  chapterTitle?: string | null;
+  totalChapters?: number | null;
+  nextBookId?: string | null;
+  prevBookId?: string | null;
 }
 
 export interface Chunk {

@@ -7,11 +7,24 @@ import { Book, Progress } from '../lib/types';
 interface BookCardProps {
   book: Book;
   progress?: Progress;
+  novelProgress?: {
+    currentChapter: Book | null;
+    chapterPercent: number;
+    overallPercent: number;
+    currentChapterIndex: number;
+    totalChapters: number;
+  };
   onAppend: (book: Book) => void;
   onDelete: (book: Book) => void;
 }
 
-export function BookCard({ book, progress, onAppend, onDelete }: BookCardProps) {
+export function BookCard({
+  book,
+  progress,
+  novelProgress,
+  onAppend,
+  onDelete,
+}: BookCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -27,8 +40,15 @@ export function BookCard({ book, progress, onAppend, onDelete }: BookCardProps) 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [menuOpen]);
 
-  const percent = progress?.percent ?? 0;
-  const isStarted = percent > 0;
+  const isChaptered = Boolean(novelProgress?.currentChapter);
+  const percent = isChaptered
+    ? novelProgress!.overallPercent
+    : progress?.percent ?? 0;
+  const isStarted = percent > 0 || (isChaptered && novelProgress!.chapterPercent > 0);
+
+  const targetBookId = isChaptered
+    ? novelProgress!.currentChapter!.id
+    : book.id;
 
   const formatDate = (timestamp?: number) => {
     if (!timestamp) return 'Never read';
@@ -100,7 +120,7 @@ export function BookCard({ book, progress, onAppend, onDelete }: BookCardProps) 
         </div>
 
         {/* Title */}
-        <Link href={`/read/${book.id}`} className="block group-hover:underline">
+        <Link href={`/read/${targetBookId}`} className="block group-hover:underline">
           <h3 className="font-bold text-lg leading-snug line-clamp-2 mb-2 font-serif">
             {book.title}
           </h3>
@@ -109,7 +129,10 @@ export function BookCard({ book, progress, onAppend, onDelete }: BookCardProps) 
         {/* Metadata */}
         <div className="text-xs opacity-60 space-y-1 mb-4">
           <div className="flex items-center justify-between">
-            <span>{book.blockCount.toLocaleString()} blocks</span>
+            <span>
+              {book.blockCount.toLocaleString()} blocks
+              {isChaptered && ` • ${novelProgress!.totalChapters} chapters`}
+            </span>
             <span>{formatDate(book.lastReadAt || book.updatedAt)}</span>
           </div>
         </div>
@@ -118,12 +141,26 @@ export function BookCard({ book, progress, onAppend, onDelete }: BookCardProps) 
       <div>
         {/* Progress bar */}
         <div className="space-y-1.5 mb-4">
-          <div className="flex items-center justify-between text-xs opacity-75 font-mono">
-            <span>{isStarted ? `${Math.round(percent)}% read` : 'Unread'}</span>
-            {isStarted && progress && (
-              <span>Block #{progress.blockId + 1}</span>
-            )}
-          </div>
+          {isChaptered && novelProgress?.currentChapter ? (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-xs opacity-90 font-mono">
+                <span className="truncate max-w-[180px] font-semibold text-blue-600 dark:text-blue-400">
+                  Ch. {novelProgress.currentChapterIndex + 1}: {Math.round(novelProgress.chapterPercent)}%
+                </span>
+                <span className="font-semibold">Novel: {Math.round(novelProgress.overallPercent)}%</span>
+              </div>
+              <div className="text-[11px] opacity-60 truncate">
+                {novelProgress.currentChapter.chapterTitle || `Chapter ${novelProgress.currentChapterIndex + 1}`}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between text-xs opacity-75 font-mono">
+              <span>{isStarted ? `${Math.round(percent)}% read` : 'Unread'}</span>
+              {isStarted && progress && (
+                <span>Block #{progress.blockId + 1}</span>
+              )}
+            </div>
+          )}
           <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-2 overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-300"
@@ -137,7 +174,7 @@ export function BookCard({ book, progress, onAppend, onDelete }: BookCardProps) 
 
         {/* Action Button */}
         <Link
-          href={`/read/${book.id}`}
+          href={`/read/${targetBookId}`}
           className="w-full py-2.5 px-4 rounded-xl text-center text-sm font-semibold transition block shadow-sm hover:shadow active:scale-[0.99]"
           style={{
             backgroundColor: isStarted ? 'var(--sb-accent, #2563eb)' : 'transparent',

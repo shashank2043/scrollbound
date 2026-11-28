@@ -2,9 +2,15 @@
 
 import React, { useState, useRef } from 'react';
 import { extractPdfBlocks, ExtractProgress } from '../lib/pdf/extract';
-import { saveBook, createChunksFromBlocks } from '../lib/db';
-import { Book } from '../lib/types';
+import { saveBook, saveChapteredNovel, createChunksFromBlocks } from '../lib/db';
+import { Book, Block } from '../lib/types';
 import { CircularProgress } from './CircularProgress';
+import {
+  ChapterSuggestion,
+  detectChapters,
+  sliceBlocksForChapters,
+} from '../lib/chapterDetector';
+import { ChapterSplitReview } from './ChapterSplitReview';
 
 interface AddBookModalProps {
   isOpen: boolean;
@@ -16,8 +22,13 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [savingMessage, setSavingMessage] = useState<string | null>(null);
   const [progress, setProgress] = useState<ExtractProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<'upload' | 'review'>('upload');
+  const [extractedBlocks, setExtractedBlocks] = useState<Block[] | null>(null);
+  const [initialSuggestions, setInitialSuggestions] = useState<ChapterSuggestion[]>([]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen) return null;
@@ -31,13 +42,12 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
         return;
       }
       setFile(selected);
-      // Default title to filename without extension
       const defaultTitle = selected.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
       setTitle(defaultTitle);
     }
   };
 
-  const handleImport = async () => {
+  const handleStartExtraction = async () => {
     if (!file || !title.trim()) return;
 
     setIsProcessing(true);
@@ -45,37 +55,81 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
     setProgress({ current: 0, total: 100, stage: 'loading' });
 
     try {
-      // 1. Read file into memory ArrayBuffer
       const arrayBuffer = await file.arrayBuffer();
-
-      // 2. Extract and reflow into blocks page-by-page
       const { blocks } = await extractPdfBlocks(arrayBuffer, {
         onProgress: (p) => setProgress(p),
       });
 
-      // 3. Immediately discard raw PDF buffer from memory
-      // Prepare Book record & Chunks
+      if (!blocks || blocks.length === 0) {
+        throw new Error('No readable text content found in this PDF.');
+      }
+
+      const suggestions = detectChapters(blocks);
+
+      setExtractedBlocks(blocks);
+      setInitialSuggestions(suggestions);
+      setIsProcessing(false);
+      setStep('review');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleConfirmSingle = async () => {
+    if (!extractedBlocks || !title.trim()) return;
+
+    setIsProcessing(true);
+    setSavingMessage('Saving single continuous novel...');
+    setError(null);
+
+    try {
       const bookId = 'book_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
-      const chunks = createChunksFromBlocks(bookId, blocks);
+      const chunks = createChunksFromBlocks(bookId, extractedBlocks);
 
       const newBook: Book = {
         id: bookId,
         title: title.trim(),
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        blockCount: blocks.length,
+        blockCount: extractedBlocks.length,
         chunkCount: chunks.length,
       };
 
-      // 4. Save to IndexedDB
       await saveBook(newBook, chunks);
-
       onBookAdded(newBook);
       onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
       setIsProcessing(false);
+      setSavingMessage(null);
+    }
+  };
+
+  const handleConfirmSplit = async (finalSuggestions: ChapterSuggestion[]) => {
+    if (!extractedBlocks || !title.trim()) return;
+
+    setIsProcessing(true);
+    setSavingMessage(`Saving novel and ${finalSuggestions.length} chapters...`);
+    setError(null);
+
+    try {
+      const sliced = sliceBlocksForChapters(extractedBlocks, finalSuggestions);
+      const chapterInputs = sliced.map((s) => ({
+        title: s.chapter.title,
+        blocks: s.blocks,
+      }));
+
+      const { parent } = await saveChapteredNovel(title.trim(), chapterInputs);
+      onBookAdded(parent);
+      onClose();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg);
+      setIsProcessing(false);
+      setSavingMessage(null);
     }
   };
 
@@ -89,7 +143,7 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       <div
-        className="w-full max-w-lg rounded-2xl p-6 shadow-2xl transition-all"
+        className="w-full max-w-xl rounded-2xl p-6 shadow-2xl transition-all"
         style={{
           backgroundColor: 'var(--sb-bg)',
           color: 'var(--sb-text)',
@@ -97,7 +151,16 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
         }}
       >
         <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/10">
-          <h2 className="text-xl font-bold tracking-tight">Add New Book</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold tracking-tight">
+              {step === 'upload' ? 'Add New Book' : 'Organize Novel Chapters'}
+            </h2>
+            {step === 'review' && (
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 font-mono">
+                Step 2 of 2
+              </span>
+            )}
+          </div>
           {!isProcessing && (
             <button
               onClick={onClose}
@@ -112,12 +175,38 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
         <div className="py-5 space-y-4">
           {error && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-sm leading-relaxed">
-              <div className="font-semibold mb-1">Import Failed</div>
+              <div className="font-semibold mb-1">Import Error</div>
               {error}
             </div>
           )}
 
-          {!isProcessing ? (
+          {isProcessing ? (
+            /* Progress view */
+            <div className="py-6 text-center space-y-4">
+              <CircularProgress
+                progress={calculatePercent()}
+                size={72}
+                strokeWidth={5}
+                label={
+                  savingMessage
+                    ? savingMessage
+                    : progress?.stage === 'loading'
+                    ? 'Opening PDF document...'
+                    : progress?.stage === 'extracting'
+                    ? `Extracting page ${progress.current} of ${progress.total}...`
+                    : 'Reflowing text into clean blocks...'
+                }
+                sublabel="PDF is parsed in memory and immediately discarded. No heavy files are uploaded."
+              />
+
+              <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-2.5 overflow-hidden mt-3">
+                <div
+                  className="bg-blue-600 h-full rounded-full transition-all duration-200"
+                  style={{ width: `${savingMessage ? 100 : calculatePercent()}%` }}
+                />
+              </div>
+            </div>
+          ) : step === 'upload' ? (
             <>
               {/* File selection */}
               <div>
@@ -152,7 +241,7 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
                         Click or drag a PDF novel here
                       </div>
                       <div className="text-xs opacity-60 mt-1">
-                        Text will be extracted and reflowed. The original PDF is never stored.
+                        Text will be extracted and reflowed. You can split into chapters next.
                       </div>
                     </div>
                   )}
@@ -176,35 +265,21 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
               )}
             </>
           ) : (
-            /* Progress view */
-            <div className="py-6 text-center space-y-4">
-              <CircularProgress
-                progress={calculatePercent()}
-                size={72}
-                strokeWidth={5}
-                label={
-                  progress?.stage === 'loading'
-                    ? 'Opening PDF document...'
-                    : progress?.stage === 'extracting'
-                    ? `Extracting page ${progress.current} of ${progress.total}...`
-                    : 'Reflowing text into clean blocks...'
-                }
-                sublabel="Processes in background. PDF is parsed in memory and immediately discarded."
+            /* Review and split step */
+            extractedBlocks && (
+              <ChapterSplitReview
+                blocks={extractedBlocks}
+                initialSuggestions={initialSuggestions}
+                onConfirmSingle={handleConfirmSingle}
+                onConfirmSplit={handleConfirmSplit}
+                onBack={() => setStep('upload')}
               />
-
-              {/* Progress bar */}
-              <div className="w-full bg-black/10 dark:bg-white/10 rounded-full h-2.5 overflow-hidden mt-3">
-                <div
-                  className="bg-blue-600 h-full rounded-full transition-all duration-200"
-                  style={{ width: `${calculatePercent()}%` }}
-                />
-              </div>
-            </div>
+            )
           )}
         </div>
 
-        {/* Modal actions */}
-        {!isProcessing && (
+        {/* Modal actions for Step 1 */}
+        {!isProcessing && step === 'upload' && (
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-black/10 dark:border-white/10">
             <button
               onClick={onClose}
@@ -213,12 +288,12 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
               Cancel
             </button>
             <button
-              onClick={handleImport}
+              onClick={handleStartExtraction}
               disabled={!file || !title.trim()}
               className="px-5 py-2 text-sm font-semibold rounded-xl text-white transition disabled:opacity-40 disabled:cursor-not-allowed shadow"
               style={{ backgroundColor: 'var(--sb-accent, #2563eb)' }}
             >
-              Import Book
+              Continue to Chapters →
             </button>
           </div>
         )}

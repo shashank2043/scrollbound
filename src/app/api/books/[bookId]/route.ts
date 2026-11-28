@@ -32,6 +32,12 @@ export async function GET(request: Request, context: RouteContext) {
         lastReadAt: book.lastReadAt ? book.lastReadAt.getTime() : undefined,
         blockCount: book.blockCount,
         chunkCount: book.chunkCount,
+        parentId: book.parentId,
+        chapterIndex: book.chapterIndex,
+        chapterTitle: book.chapterTitle,
+        totalChapters: book.totalChapters,
+        nextBookId: book.nextBookId,
+        prevBookId: book.prevBookId,
       },
     });
   } catch (err: unknown) {

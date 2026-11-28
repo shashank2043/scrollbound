@@ -143,6 +143,12 @@ async function saveBookCore(book: Book, chunks: Chunk[]): Promise<void> {
       blockCount: book.blockCount,
       chunkCount: book.chunkCount,
       chunks: initialChunks,
+      parentId: book.parentId,
+      chapterIndex: book.chapterIndex,
+      chapterTitle: book.chapterTitle,
+      totalChapters: book.totalChapters,
+      nextBookId: book.nextBookId,
+      prevBookId: book.prevBookId,
     }),
   });
 
@@ -161,6 +167,165 @@ async function saveBookCore(book: Book, chunks: Chunk[]): Promise<void> {
  * Save newly imported book with AOP timing and console logging
  */
 export const saveBook = aopLogged('saveBook', undefined, saveBookCore);
+
+export interface ChapterInput {
+  title: string;
+  blocks: Block[];
+}
+
+/**
+ * Save a novel split into multiple linked chapters.
+ * Creates a parent container Book plus linked child chapter Books.
+ */
+export async function saveChapteredNovel(
+  novelTitle: string,
+  chapterInputs: ChapterInput[]
+): Promise<{ parent: Book; chapters: Book[] }> {
+  const parentId = 'novel_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
+  const totalBlocks = chapterInputs.reduce((sum, ch) => sum + ch.blocks.length, 0);
+
+  // Pre-generate unique IDs for each chapter to establish next/prev linking pointers
+  const chapterIds = chapterInputs.map(
+    (_, idx) => `chap_${parentId}_${idx + 1}_${Math.random().toString(36).substring(2, 6)}`
+  );
+
+  const chapters: { book: Book; chunks: Chunk[] }[] = [];
+
+  for (let idx = 0; idx < chapterInputs.length; idx++) {
+    const input = chapterInputs[idx];
+    const chId = chapterIds[idx];
+    const chunks = createChunksFromBlocks(chId, input.blocks);
+
+    const chapterBook: Book = {
+      id: chId,
+      title: `${novelTitle.trim()} - ${input.title}`,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      blockCount: input.blocks.length,
+      chunkCount: chunks.length,
+      parentId,
+      chapterIndex: idx,
+      chapterTitle: input.title,
+      totalChapters: chapterInputs.length,
+      prevBookId: idx > 0 ? chapterIds[idx - 1] : null,
+      nextBookId: idx < chapterInputs.length - 1 ? chapterIds[idx + 1] : null,
+    };
+
+    chapters.push({ book: chapterBook, chunks });
+  }
+
+  const parentBook: Book = {
+    id: parentId,
+    title: novelTitle.trim(),
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    blockCount: totalBlocks,
+    chunkCount: 0,
+    totalChapters: chapterInputs.length,
+  };
+
+  // 1. Save parent book container
+  await saveBook(parentBook, []);
+
+  // 2. Save each chapter book in order
+  for (const item of chapters) {
+    await saveBook(item.book, item.chunks);
+  }
+
+  return {
+    parent: parentBook,
+    chapters: chapters.map((c) => c.book),
+  };
+}
+
+/**
+ * Get all child chapters for a given parent novel ID
+ */
+export function getChaptersForNovel(parentId: string): Book[] {
+  const all = getCachedBooks();
+  return all
+    .filter((b) => b.parentId === parentId)
+    .sort((a, b) => (a.chapterIndex ?? 0) - (b.chapterIndex ?? 0));
+}
+
+/**
+ * Calculates current reading chapter, current chapter progress percentage,
+ * and overall novel reading percentage across all chapters.
+ */
+export function calculateNovelProgress(
+  parentBook: Book,
+  allBooks: Book[],
+  progressMap: Record<string, Progress>
+): {
+  currentChapter: Book | null;
+  chapterPercent: number;
+  overallPercent: number;
+  currentChapterIndex: number;
+  totalChapters: number;
+} {
+  const chapters = allBooks
+    .filter((b) => b.parentId === parentBook.id)
+    .sort((a, b) => (a.chapterIndex ?? 0) - (b.chapterIndex ?? 0));
+
+  const totalChapters = parentBook.totalChapters || chapters.length || 1;
+
+  if (chapters.length === 0) {
+    const singleProg = progressMap[parentBook.id];
+    const pct = singleProg?.percent ?? 0;
+    return {
+      currentChapter: null,
+      chapterPercent: pct,
+      overallPercent: pct,
+      currentChapterIndex: 0,
+      totalChapters: 1,
+    };
+  }
+
+  // Find most recently read chapter with progress or lastReadAt
+  let latestChapter: Book = chapters[0];
+  let latestReadTime = 0;
+  let hasAnyRead = false;
+
+  for (const ch of chapters) {
+    const prog = progressMap[ch.id];
+    const readTime = Math.max(ch.lastReadAt || 0, prog?.updatedAt || 0);
+    if (readTime > latestReadTime) {
+      latestReadTime = readTime;
+      latestChapter = ch;
+      hasAnyRead = true;
+    }
+  }
+
+  const latestProg = progressMap[latestChapter.id];
+  const chapterPercent = latestProg?.percent ?? 0;
+
+  // Calculate overall novel progress:
+  // (Completed blocks in chapters prior to latestChapter + current block in latestChapter) / total blocks
+  const currentChapterIdx = latestChapter.chapterIndex ?? 0;
+  let blocksReadBefore = 0;
+  for (let i = 0; i < currentChapterIdx; i++) {
+    blocksReadBefore += chapters[i].blockCount;
+  }
+
+  const currentChapterBlock = latestProg?.blockId ?? 0;
+  const totalNovelBlocks =
+    parentBook.blockCount ||
+    chapters.reduce((sum, c) => sum + c.blockCount, 0) ||
+    1;
+  const overallBlocks = hasAnyRead ? blocksReadBefore + currentChapterBlock : 0;
+  const overallPercent = Math.min(
+    100,
+    Math.round((overallBlocks / totalNovelBlocks) * 100)
+  );
+
+  return {
+    currentChapter: latestChapter,
+    chapterPercent,
+    overallPercent,
+    currentChapterIndex: currentChapterIdx,
+    totalChapters,
+  };
+}
 
 /**
  * Core Append Book Function
@@ -380,11 +545,17 @@ const aspectDeleteBook = aopBackgroundSync('deleteBook', 'DELETE_BOOK', cloudDel
  * Delete a book: optimistic local removal with AOP background sync & timing
  */
 export async function deleteBook(id: string): Promise<void> {
-  const cached = getCachedBooks().filter((b) => b.id !== id);
+  const cached = getCachedBooks().filter((b) => b.id !== id && b.parentId !== id);
   setCachedBooks(cached);
 
   const progMap = getCachedProgressMap();
   delete progMap[id];
+  // Prune any child chapter progresses
+  for (const key of Object.keys(progMap)) {
+    if (key.includes(id)) {
+      delete progMap[key];
+    }
+  }
   setCachedProgressMap(progMap);
 
   aspectDeleteBook({ id });

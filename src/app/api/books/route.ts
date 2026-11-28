@@ -51,6 +51,12 @@ export async function GET() {
         lastReadAt: b.lastReadAt ? b.lastReadAt.getTime() : undefined,
         blockCount: b.blockCount,
         chunkCount: b.chunkCount,
+        parentId: b.parentId,
+        chapterIndex: b.chapterIndex,
+        chapterTitle: b.chapterTitle,
+        totalChapters: b.totalChapters,
+        nextBookId: b.nextBookId,
+        prevBookId: b.prevBookId,
       };
     });
 
@@ -69,7 +75,19 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { id, title, blockCount, chunkCount, chunks } = body;
+    const {
+      id,
+      title,
+      blockCount,
+      chunkCount,
+      chunks,
+      parentId,
+      chapterIndex,
+      chapterTitle,
+      totalChapters,
+      nextBookId,
+      prevBookId,
+    } = body;
 
     if (!id || !title || !Array.isArray(chunks)) {
       return NextResponse.json({ error: 'Invalid book payload.' }, { status: 400 });
@@ -84,6 +102,12 @@ export async function POST(request: Request) {
           title: title.trim(),
           blockCount: blockCount || 0,
           chunkCount: chunkCount || chunks.length,
+          parentId: parentId || null,
+          chapterIndex: typeof chapterIndex === 'number' ? chapterIndex : null,
+          chapterTitle: chapterTitle ? chapterTitle.trim() : null,
+          totalChapters: typeof totalChapters === 'number' ? totalChapters : null,
+          nextBookId: nextBookId || null,
+          prevBookId: prevBookId || null,
         },
       });
 
@@ -109,6 +133,12 @@ export async function POST(request: Request) {
         updatedAt: book.updatedAt.getTime(),
         blockCount: book.blockCount,
         chunkCount: book.chunkCount,
+        parentId: book.parentId,
+        chapterIndex: book.chapterIndex,
+        chapterTitle: book.chapterTitle,
+        totalChapters: book.totalChapters,
+        nextBookId: book.nextBookId,
+        prevBookId: book.prevBookId,
       },
       success: true,
     });

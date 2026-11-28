@@ -77,21 +77,31 @@ model Verification {
 }
 
 model Book {
-  id         String     @id
-  userId     String
-  title      String
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  lastReadAt DateTime?
-  blockCount Int        @default(0)
-  chunkCount Int        @default(0)
+  id            String     @id
+  userId        String
+  title         String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  lastReadAt    DateTime?
+  blockCount    Int        @default(0)
+  chunkCount    Int        @default(0)
+
+  parentId      String?
+  chapterIndex  Int?
+  chapterTitle  String?
+  totalChapters Int?
+  nextBookId    String?
+  prevBookId    String?
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent     Book?      @relation("BookChapters", fields: [parentId], references: [id], onDelete: Cascade)
+  chapters   Book[]     @relation("BookChapters")
   chunks     Chunk[]
   bookmarks  Bookmark[]
   progress   Progress[]
 
   @@index([userId])
+  @@index([parentId])
   @@map("books")
 }
 
