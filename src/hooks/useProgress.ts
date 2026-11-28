@@ -5,16 +5,35 @@ import { Progress } from '../lib/types';
 import { getProgress, saveProgress } from '../lib/db';
 
 export function useProgress(bookId: string, totalBlocks: number) {
-  const [progress, setProgress] = useState<Progress | null>(null);
-  const [currentBlockId, setCurrentBlockId] = useState<number>(0);
-  const [currentOffset, setCurrentOffset] = useState<number>(0);
-  const [percent, setPercent] = useState<number>(0);
-  const [isRestored, setIsRestored] = useState(false);
+  // Synchronous initial read from localStorage for 0ms initial render
+  const getInitial = (): Progress | null => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const raw = localStorage.getItem(`scrollbound_progress_${bookId}`);
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    try {
+      const mapRaw = localStorage.getItem('scrollbound_cached_progress_map');
+      if (mapRaw) {
+        const map = JSON.parse(mapRaw);
+        if (map && map[bookId]) return map[bookId];
+      }
+    } catch {}
+    return null;
+  };
+
+  const initial = getInitial();
+
+  const [progress, setProgress] = useState<Progress | null>(initial);
+  const [currentBlockId, setCurrentBlockId] = useState<number>(initial?.blockId ?? 0);
+  const [currentOffset, setCurrentOffset] = useState<number>(initial?.offset ?? 0);
+  const [percent, setPercent] = useState<number>(initial?.percent ?? 0);
+  const [isRestored, setIsRestored] = useState(true);
 
   const pendingProgressRef = useRef<Progress | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load existing progress from IndexedDB
+  // Background sync with PostgreSQL
   useEffect(() => {
     let isMounted = true;
     getProgress(bookId).then((saved) => {

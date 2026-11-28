@@ -4,9 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && tsx tests/integration.test.ts && next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx tests/backend.unit.test.ts",
+    "test:unit": "tsx tests/backend.unit.test.ts",
+    "test:integration": "tsx tests/integration.test.ts",
     "postinstall": "prisma generate",
     "db:push": "prisma db push",
     "db:generate": "prisma generate",
@@ -33,6 +37,8 @@
     "eslint-config-next": "16.4.6",
     "prisma": "^6.19.3",
     "tailwindcss": "4.3.3",
+    "tsx": "^4.23.15",
+    "turbo": "^2.11.13",
     "typescript": "^5"
   },
   "packageManager": "pnpm@12.23.0"

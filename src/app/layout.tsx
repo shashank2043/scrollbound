@@ -33,6 +33,7 @@ export const viewport: Viewport = {
 
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthModal } from '@/components/AuthModal';
+import { SyncFailureModal } from '@/components/SyncFailureModal';
 
 export default function RootLayout({
   children,
@@ -75,10 +76,11 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-full flex flex-col max-w-full overflow-x-hidden">
         <AuthProvider>
           {children}
           <AuthModal />
+          <SyncFailureModal />
         </AuthProvider>
       </body>
     </html>

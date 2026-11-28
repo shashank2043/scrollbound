@@ -61,6 +61,8 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   lineHeight: 1.7,
   contentWidth: 65,
   themeId: 'light',
+  autoSyncEnabled: true,
+  autoSyncIntervalMinutes: 5, // Default 5 minutes
 };
 
 /**

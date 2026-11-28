@@ -1,0 +1,38 @@
+name: Backend Unit Tests
+
+on:
+  push:
+    branches: [ main, sync-improvements ]
+  pull_request:
+    branches: [ main, sync-improvements ]
+
+jobs:
+  unit-tests:
+    name: Backend Logic Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm exec prisma generate
+
+      - name: Run Backend Logic Unit Tests
+        run: pnpm test:unit
+        env:
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/scrollbound"
+          BETTER_AUTH_SECRET: "scrollbound-ci-test-secret-2026-very-secure"
+          BETTER_AUTH_URL: "http://localhost:3000"

@@ -29,34 +29,46 @@ export function ReaderContent({
   const [minChunkIdx, setMinChunkIdx] = useState<number>(0);
   const [maxChunkIdx, setMaxChunkIdx] = useState<number>(0);
   const [isLoadingChunk, setIsLoadingChunk] = useState<boolean>(false);
-  const [hasRestoredPosition, setHasRestoredPosition] = useState<boolean>(() => {
-    return !initialProgress || (initialProgress.blockId === 0 && initialProgress.offset === 0);
-  });
+
+  // Track if restoration is complete
+  const targetBlockId = initialProgress?.blockId ?? 0;
+  const targetOffset = initialProgress?.offset ?? 0;
+  const needsRestore = targetBlockId > 0 || targetOffset > 0;
+
+  const [hasRestoredPosition, setHasRestoredPosition] = useState<boolean>(!needsRestore);
+  const [activeParagraphId, setActiveParagraphId] = useState<number | null>(null);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const topSentinelRef = useRef<HTMLDivElement>(null);
   const isRestoringRef = useRef<boolean>(false);
 
+  // Disable automatic browser scroll restoration to prevent scroll position clobbering
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
   // Set of bookmarked block IDs for fast lookup
   const bookmarkedBlockIds = new Set(bookmarks.map((b) => b.blockId));
 
-  // 1. Initial chunk loading based on initialProgress
+  // 1. Initial chunk loading based on targetBlockId
   useEffect(() => {
     let isMounted = true;
-    const initialBlockId = initialProgress ? initialProgress.blockId : 0;
     const initialChunk = Math.min(
       book.chunkCount - 1,
-      Math.max(0, Math.floor(initialBlockId / CHUNK_SIZE))
+      Math.max(0, Math.floor(targetBlockId / CHUNK_SIZE))
     );
 
     async function loadInitial() {
       setIsLoadingChunk(true);
       const newMap = new Map<number, Block[]>();
 
-      // Load all chunks from 0 up to initialChunk + 1 so layout above reader is solid and stable
+      // Load surrounding chunks:
+      // If near beginning, start at 0. Otherwise load 2 chunks before up to 1 chunk after
       const maxToLoad = Math.min(book.chunkCount - 1, initialChunk + 1);
-      const fromChunk = initialChunk <= 15 ? 0 : Math.max(0, initialChunk - 2);
+      const fromChunk = initialChunk <= 10 ? 0 : Math.max(0, initialChunk - 2);
 
       const promises: Promise<Chunk | undefined>[] = [];
       for (let c = fromChunk; c <= maxToLoad; c++) {
@@ -88,14 +100,26 @@ export function ReaderContent({
     return () => {
       isMounted = false;
     };
-  }, [book.id, book.chunkCount, initialProgress]);
+  }, [book.id, book.chunkCount, targetBlockId]);
 
-  // 2. Restore reading position once initial target block is in DOM
+  // 2. Restore reading position once target block is in DOM
   useEffect(() => {
     if (hasRestoredPosition || chunkMap.size === 0 || isRestoringRef.current) return;
 
-    const targetBlockId = initialProgress ? initialProgress.blockId : 0;
-    const offset = initialProgress ? initialProgress.offset : 0;
+    if (!needsRestore) {
+      setHasRestoredPosition(true);
+      return;
+    }
+
+    const targetChunk = Math.min(
+      book.chunkCount - 1,
+      Math.max(0, Math.floor(targetBlockId / CHUNK_SIZE))
+    );
+
+    // Wait until the target chunk is actually in chunkMap before attempting DOM queries
+    if (!chunkMap.has(targetChunk)) {
+      return;
+    }
 
     isRestoringRef.current = true;
 
@@ -108,14 +132,14 @@ export function ReaderContent({
         const scrollToBlock = () => {
           const rect = el.getBoundingClientRect();
           const headerOffset = 80;
-          const targetScrollY = window.scrollY + rect.top + offset * rect.height - headerOffset;
+          const targetScrollY = window.scrollY + rect.top + targetOffset * rect.height - headerOffset;
           window.scrollTo({
             top: Math.max(0, targetScrollY),
             behavior: 'instant',
           });
         };
 
-        // Multi-pass restoration to lock position across font metrics and layout passes
+        // Multi-pass restoration across render frames to ensure fonts and layout settle
         scrollToBlock();
         requestAnimationFrame(() => {
           scrollToBlock();
@@ -123,9 +147,10 @@ export function ReaderContent({
             scrollToBlock();
             setHasRestoredPosition(true);
             isRestoringRef.current = false;
-          }, 60);
+          }, 80);
         });
-      } else if (attempts > 50) {
+      } else if (attempts > 75) {
+        // Fallback after 3 seconds
         clearInterval(interval);
         setHasRestoredPosition(true);
         isRestoringRef.current = false;
@@ -135,7 +160,7 @@ export function ReaderContent({
     return () => {
       clearInterval(interval);
     };
-  }, [hasRestoredPosition, chunkMap, initialProgress]);
+  }, [hasRestoredPosition, chunkMap, targetBlockId, targetOffset, needsRestore, book.chunkCount]);
 
   // 3. Handle jump-to bookmark or search target
   useEffect(() => {
@@ -156,7 +181,6 @@ export function ReaderContent({
         }
       }
 
-      // Smooth scroll to the target block
       setTimeout(() => {
         const el = document.getElementById(`block-${jumpToBlockId}`);
         if (el) {
@@ -191,14 +215,12 @@ export function ReaderContent({
     const prevIdx = minChunkIdx - 1;
     const chunk = await getChunk(book.id, prevIdx);
     if (chunk) {
-      // Remember scroll height before prepending to prevent jump
       const prevScrollHeight = document.documentElement.scrollHeight;
       const prevScrollTop = window.scrollY;
 
       setChunkMap((prev) => new Map(prev).set(chunk.index, chunk.blocks));
       setMinChunkIdx(prevIdx);
 
-      // Adjust scroll after render
       requestAnimationFrame(() => {
         const newScrollHeight = document.documentElement.scrollHeight;
         const delta = newScrollHeight - prevScrollHeight;
@@ -243,7 +265,7 @@ export function ReaderContent({
     return () => observer.disconnect();
   }, [loadPrevChunk, isLoadingChunk, minChunkIdx]);
 
-  // 7. Track position on scroll
+  // 7. Track position on scroll (only active after position restoration completes)
   useEffect(() => {
     if (!hasRestoredPosition) return;
 
@@ -309,12 +331,19 @@ export function ReaderContent({
   return (
     <div
       ref={containerRef}
-      className="pt-20 pb-40 px-4 sm:px-8 transition-all"
+      className="pt-20 pb-40 px-3 sm:px-8 transition-all max-w-full overflow-x-hidden"
       style={{
         fontSize: 'var(--sb-font-size, 18px)',
         fontFamily: 'var(--sb-font-family, serif)',
         lineHeight: 'var(--sb-line-height, 1.7)',
         color: 'var(--sb-text)',
+      }}
+      onClick={(e) => {
+        // If clicking outside any block, clear active tap
+        const target = e.target as HTMLElement;
+        if (!target.closest('[data-block-id]')) {
+          setActiveParagraphId(null);
+        }
       }}
     >
       {/* Top Sentinel for loading previous chunks when scrolling up */}
@@ -322,13 +351,14 @@ export function ReaderContent({
 
       {/* Main reader container with constrained width */}
       <div
-        className="mx-auto select-text"
+        className="mx-auto select-text max-w-full break-words"
         style={{
           maxWidth: 'var(--sb-content-width, 65ch)',
         }}
       >
         {allBlocks.map((block) => {
           const isBookmarked = bookmarkedBlockIds.has(block.id);
+          const isActive = activeParagraphId === block.id;
 
           if (block.type === 'heading') {
             return (
@@ -336,18 +366,30 @@ export function ReaderContent({
                 key={block.id}
                 id={`block-${block.id}`}
                 data-block-id={block.id}
-                className="relative group pt-8 pb-4 scroll-mt-24"
+                onClick={() => setActiveParagraphId(isActive ? null : block.id)}
+                className={`relative group pt-8 pb-4 scroll-mt-24 cursor-pointer sm:cursor-default rounded-xl transition-all ${
+                  isActive ? 'bg-black/[0.03] dark:bg-white/[0.04] px-2' : ''
+                }`}
               >
-                <h2 className="text-xl sm:text-2xl font-bold tracking-tight opacity-95 text-center font-serif">
+                <h2 className="text-xl sm:text-2xl font-bold tracking-tight opacity-95 text-center font-serif break-words">
                   {block.text}
                 </h2>
-                {/* Bookmark trigger on heading */}
+
+                {/* Bookmark trigger on heading (visible on desktop hover or mobile active or bookmarked) */}
                 <button
-                  onClick={() => onToggleBookmark(block.id, block.text)}
-                  className={`absolute right-0 top-8 p-1.5 rounded-lg text-sm transition opacity-0 group-hover:opacity-100 ${
-                    isBookmarked ? '!opacity-100 text-amber-500' : 'opacity-40 hover:opacity-100'
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onToggleBookmark(block.id, block.text);
+                  }}
+                  className={`absolute right-1 top-8 p-2 rounded-lg text-sm transition ${
+                    isBookmarked
+                      ? 'opacity-100 text-amber-500 scale-110'
+                      : isActive
+                      ? 'opacity-100 bg-black/10 dark:bg-white/15'
+                      : 'opacity-0 group-hover:opacity-100 opacity-40 hover:opacity-100'
                   }`}
                   title={isBookmarked ? 'Remove bookmark' : 'Bookmark this section'}
+                  aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark this section'}
                 >
                   {isBookmarked ? '🔖' : '📑'}
                 </button>
@@ -361,28 +403,45 @@ export function ReaderContent({
               key={block.id}
               id={`block-${block.id}`}
               data-block-id={block.id}
-              className={`relative group my-4 scroll-mt-24 rounded-lg transition-colors p-1.5 -mx-1.5 ${
+              onClick={() => setActiveParagraphId(isActive ? null : block.id)}
+              className={`relative group my-4 scroll-mt-24 rounded-lg transition-all p-2 -mx-2 ${
                 isBookmarked
                   ? 'border-l-4 pl-3.5 border-amber-500/80 bg-amber-500/5'
+                  : isActive
+                  ? 'bg-blue-500/5 ring-1 ring-blue-500/20'
                   : 'hover:bg-black/[0.02] dark:hover:bg-white/[0.02]'
               }`}
             >
-              <p className="text-justify sm:text-left leading-relaxed">
+              <p className="text-justify sm:text-left leading-relaxed break-words">
                 {block.text}
               </p>
 
               {/* Bookmark indicator / trigger button */}
               <button
-                onClick={() => onToggleBookmark(block.id, block.text)}
-                className={`absolute right-1 top-1 p-1 rounded-md text-xs transition ${
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleBookmark(block.id, block.text);
+                }}
+                className={`absolute right-1 top-1.5 min-w-[32px] min-h-[32px] flex items-center justify-center rounded-md text-xs transition z-10 ${
                   isBookmarked
                     ? 'opacity-100 text-amber-500 scale-110'
+                    : isActive
+                    ? 'opacity-100 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium px-2 py-1'
                     : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'
                 }`}
                 title={isBookmarked ? 'Remove bookmark' : 'Bookmark paragraph'}
                 aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark paragraph'}
               >
-                {isBookmarked ? '🔖' : '📑'}
+                {isBookmarked ? (
+                  <span>🔖</span>
+                ) : isActive ? (
+                  <span className="flex items-center gap-1 text-[11px]">
+                    <span>📑</span>
+                    <span className="hidden sm:inline">Bookmark</span>
+                  </span>
+                ) : (
+                  <span>📑</span>
+                )}
               </button>
             </div>
           );
@@ -393,7 +452,7 @@ export function ReaderContent({
       <div ref={bottomSentinelRef} className="h-20 flex items-center justify-center">
         {isLoadingChunk && (
           <div className="text-xs opacity-50 flex items-center gap-2 font-mono">
-            <span className="inline-block animate-spin">⏳</span>
+            <span className="inline-block w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
             <span>Loading next chunk...</span>
           </div>
         )}
