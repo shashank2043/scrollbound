@@ -162,16 +162,16 @@ export function AddBookModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       <div
-        className="w-full max-w-xl rounded-2xl p-6 shadow-2xl transition-all"
+        className={`w-full ${step === 'review' ? 'max-w-4xl max-h-[92vh]' : 'max-w-xl'} rounded-2xl p-5 sm:p-6 shadow-2xl transition-all flex flex-col`}
         style={{
           backgroundColor: 'var(--sb-bg)',
           color: 'var(--sb-text)',
           border: '1px solid rgba(128, 128, 128, 0.2)',
         }}
       >
-        <div className="flex items-center justify-between pb-4 border-b border-black/10 dark:border-white/10">
+        <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-black/10 dark:border-white/10 shrink-0">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold tracking-tight">
               {step === 'upload' ? 'Add New Book' : 'Organize Novel Chapters'}
@@ -185,7 +185,7 @@ export function AddBookModal({
           {!isProcessing && (
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1 rounded cursor-pointer"
               aria-label="Close"
             >
               <X className="w-5 h-5" />
@@ -193,7 +193,7 @@ export function AddBookModal({
           )}
         </div>
 
-        <div className="py-5 space-y-4">
+        <div className={`py-3 sm:py-4 space-y-4 ${step === 'review' ? 'flex-1 min-h-0 flex flex-col' : ''} overflow-y-auto`}>
           {error && (
             <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 text-sm leading-relaxed">
               <div className="font-semibold mb-1">Import Error</div>

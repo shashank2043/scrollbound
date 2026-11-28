@@ -100,4 +100,35 @@ describe('Chapter Detection Engine', () => {
     assert.strictEqual(suggestions[0].startBlockIndex, 0);
     assert.strictEqual(suggestions[0].endBlockIndex, 2);
   });
+
+  it('supports visual breakpoint placement at specific content blocks and reorders boundaries', () => {
+    // Start with 1 full novel suggestion
+    const initial = detectChapters(sampleBlocks);
+    
+    // Simulate user reading content and placing a visual breakpoint at block 4
+    const customBreak: ChapterSuggestion = {
+      id: 'custom_cut_1',
+      title: 'Chapter 1.5: Winter Stars',
+      startBlockIndex: 4,
+      endBlockIndex: sampleBlocks.length,
+      previewSnippet: sampleBlocks[4].text.slice(0, 100),
+    };
+
+    const updated = recalculateBoundaries([...initial, customBreak], sampleBlocks.length);
+    assert.strictEqual(updated.length, initial.length + 1);
+
+    // Verify ordering: Chapter at block 2 now ends at block 4, and custom chapter starts at block 4 and ends at block 5
+    const chapBefore = updated.find((s) => s.startBlockIndex === 2);
+    const customChap = updated.find((s) => s.startBlockIndex === 4);
+    const chapAfter = updated.find((s) => s.startBlockIndex === 5);
+
+    assert.ok(chapBefore);
+    assert.ok(customChap);
+    assert.ok(chapAfter);
+
+    assert.strictEqual(chapBefore!.endBlockIndex, 4);
+    assert.strictEqual(customChap!.startBlockIndex, 4);
+    assert.strictEqual(customChap!.endBlockIndex, 5);
+    assert.strictEqual(chapAfter!.startBlockIndex, 5);
+  });
 });
