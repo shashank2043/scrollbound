@@ -123,6 +123,9 @@ export async function POST(request: Request) {
       }
 
       return createdBook;
+    }, {
+      maxWait: 15000,
+      timeout: 30000,
     });
 
     return NextResponse.json({

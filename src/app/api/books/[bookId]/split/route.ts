@@ -35,106 +35,118 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Book not found' }, { status: 404 });
     }
 
-    const createdChapters = await prisma.$transaction(async (tx) => {
-      // 1. Delete any previously generated chapters for this parent book
-      await tx.book.deleteMany({
-        where: { parentId: bookId, userId: user.id },
-      });
+    const createdChapters = await prisma.$transaction(
+      async (tx) => {
+        // 1. Delete any previously generated chapters for this parent book
+        await tx.book.deleteMany({
+          where: { parentId: bookId, userId: user.id },
+        });
 
-      // 2. Update parent book's totalChapters
-      await tx.book.update({
-        where: { id: bookId },
-        data: {
-          totalChapters: chapters.length,
-          updatedAt: new Date(),
-        },
-      });
-
-      // 3. Insert each chapter and its chunks
-      const savedList = [];
-      for (const ch of chapters) {
-        const created = await tx.book.create({
+        // 2. Update parent book's totalChapters
+        await tx.book.update({
+          where: { id: bookId },
           data: {
-            id: ch.id,
-            userId: user.id,
-            title: ch.title,
-            parentId: bookId,
-            chapterIndex: ch.chapterIndex,
-            chapterTitle: ch.chapterTitle,
             totalChapters: chapters.length,
-            nextBookId: ch.nextBookId || null,
-            prevBookId: ch.prevBookId || null,
-            blockCount: ch.blockCount || 0,
-            chunkCount: ch.chunkCount || (ch.chunks?.length ?? 0),
+            updatedAt: new Date(),
           },
         });
 
-        if (Array.isArray(ch.chunks) && ch.chunks.length > 0) {
+        // 3. Batch insert all chapter books in a single round-trip query
+        const chapterBooksData = chapters.map((ch) => ({
+          id: ch.id,
+          userId: user.id,
+          title: ch.title,
+          parentId: bookId,
+          chapterIndex: ch.chapterIndex,
+          chapterTitle: ch.chapterTitle,
+          totalChapters: chapters.length,
+          nextBookId: ch.nextBookId || null,
+          prevBookId: ch.prevBookId || null,
+          blockCount: ch.blockCount || 0,
+          chunkCount: ch.chunkCount || (ch.chunks?.length ?? 0),
+        }));
+
+        await tx.book.createMany({
+          data: chapterBooksData,
+        });
+
+        // 4. Batch insert all chunks across all chapters in a single round-trip query
+        const allChunksData = chapters.flatMap((ch) =>
+          Array.isArray(ch.chunks)
+            ? ch.chunks.map((c: { id: string; index: number; blocks: unknown }) => ({
+                id: c.id,
+                bookId: ch.id,
+                index: c.index,
+                blocks: c.blocks as Prisma.InputJsonValue,
+              }))
+            : []
+        );
+
+        if (allChunksData.length > 0) {
           await tx.chunk.createMany({
-            data: ch.chunks.map((c: { id: string; index: number; blocks: unknown }) => ({
-              id: c.id,
-              bookId: ch.id,
-              index: c.index,
-              blocks: c.blocks as Prisma.InputJsonValue,
-            })),
+            data: allChunksData,
           });
         }
 
-        savedList.push(created);
-      }
+        // 5. Migrate user's existing reading progress to the appropriate chapter if available
+        if (parentBook.progress.length > 0) {
+          const oldProg = parentBook.progress[0];
+          let accumulatedBlocks = 0;
+          let matchedChapter = chapterBooksData[0];
+          let relativeBlockId = oldProg.blockId;
 
-      // 4. Migrate user's existing reading progress to the appropriate chapter if available
-      if (parentBook.progress.length > 0) {
-        const oldProg = parentBook.progress[0];
-        // Find which chapter encompasses oldProg.blockId
-        let accumulatedBlocks = 0;
-        let matchedChapter = savedList[0];
-        let relativeBlockId = oldProg.blockId;
-
-        for (const ch of savedList) {
-          if (
-            oldProg.blockId >= accumulatedBlocks &&
-            oldProg.blockId < accumulatedBlocks + ch.blockCount
-          ) {
-            matchedChapter = ch;
-            relativeBlockId = oldProg.blockId - accumulatedBlocks;
-            break;
+          for (const ch of chapterBooksData) {
+            if (
+              oldProg.blockId >= accumulatedBlocks &&
+              oldProg.blockId < accumulatedBlocks + ch.blockCount
+            ) {
+              matchedChapter = ch;
+              relativeBlockId = oldProg.blockId - accumulatedBlocks;
+              break;
+            }
+            accumulatedBlocks += ch.blockCount;
           }
-          accumulatedBlocks += ch.blockCount;
-        }
 
-        if (matchedChapter) {
-          const chapterPercent =
-            matchedChapter.blockCount > 0
-              ? Math.min(100, Math.round((relativeBlockId / matchedChapter.blockCount) * 100))
-              : 0;
+          if (matchedChapter) {
+            const chapterPercent =
+              matchedChapter.blockCount > 0
+                ? Math.min(
+                    100,
+                    Math.round((relativeBlockId / matchedChapter.blockCount) * 100)
+                  )
+                : 0;
 
-          await tx.progress.upsert({
-            where: {
-              userId_bookId: {
+            await tx.progress.upsert({
+              where: {
+                userId_bookId: {
+                  userId: user.id,
+                  bookId: matchedChapter.id,
+                },
+              },
+              update: {
+                blockId: relativeBlockId,
+                offset: oldProg.offset,
+                percent: chapterPercent,
+                updatedAt: new Date(),
+              },
+              create: {
                 userId: user.id,
                 bookId: matchedChapter.id,
+                blockId: relativeBlockId,
+                offset: oldProg.offset,
+                percent: chapterPercent,
               },
-            },
-            update: {
-              blockId: relativeBlockId,
-              offset: oldProg.offset,
-              percent: chapterPercent,
-              updatedAt: new Date(),
-            },
-            create: {
-              userId: user.id,
-              bookId: matchedChapter.id,
-              blockId: relativeBlockId,
-              offset: oldProg.offset,
-              percent: chapterPercent,
-            },
-          });
+            });
+          }
         }
-      }
 
-      return savedList;
-    });
+        return chapterBooksData;
+      },
+      {
+        maxWait: 15000,
+        timeout: 30000,
+      }
+    );
 
     return NextResponse.json({
       success: true,
