@@ -117,8 +117,9 @@ export function detectChapters(
   }
 
   // If first detected chapter doesn't start at block 0, add a Prologue/Introduction
+  // If only 1 leading block exists (e.g. novel title/cover line), merge into Chapter 1
   const suggestions: ChapterSuggestion[] = [];
-  if (detectedStarts[0].blockIndex > 0) {
+  if (detectedStarts[0].blockIndex > 1) {
     suggestions.push({
       id: 'chap_0',
       title: 'Prologue / Opening',
@@ -126,6 +127,8 @@ export function detectChapters(
       endBlockIndex: detectedStarts[0].blockIndex,
       previewSnippet: blocks[0]?.text.slice(0, 100) || '',
     });
+  } else if (detectedStarts[0].blockIndex === 1) {
+    detectedStarts[0].blockIndex = 0;
   }
 
   // Construct suggestions with endBlockIndex
