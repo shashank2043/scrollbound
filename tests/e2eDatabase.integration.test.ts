@@ -77,7 +77,7 @@ describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () =>
   });
 
   it('uploads a complete novel via backend route POST /api/books with initial and background chunks', async () => {
-    // Generate 600 blocks simulating an uploaded novel like Overgeared
+    // Generate 600 blocks simulating an uploaded serialized novel
     const dummyBlocks: Block[] = [];
     for (let i = 0; i < 600; i++) {
       if (i % 60 === 0) {
@@ -103,7 +103,7 @@ describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () =>
     // Call POST /api/books route handler
     const createReq = makeRequest('http://localhost:3000/api/books', 'POST', {
       id: parentBookId,
-      title: 'Overgeared Full Route E2E',
+      title: 'Fantasy Epic Novel Full Route E2E',
       blockCount: dummyBlocks.length,
       chunkCount: chunks.length,
       chunks: initialChunks,
@@ -243,7 +243,7 @@ describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () =>
       const chunks = createChunksFromBlocks(chId, s.blocks);
       return {
         id: chId,
-        title: `Overgeared E2E - ${s.chapter.title}`,
+        title: `Fantasy Epic E2E - ${s.chapter.title}`,
         chapterIndex: idx,
         chapterTitle: s.chapter.title,
         prevBookId: idx > 0 ? chapterIds[idx - 1] : null,
