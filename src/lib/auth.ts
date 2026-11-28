@@ -112,14 +112,18 @@ export const auth = betterAuth({
  * Retrieve the currently authenticated user from Better Auth session.
  * Used by all internal API routes (books, chunks, progress, bookmarks, settings).
  */
-export async function getCurrentUser() {
+export async function getCurrentUser(request?: Request) {
   try {
     let reqHeaders: Headers;
-    try {
-      reqHeaders = await headers();
-    } catch {
-      // During static prerendering or outside request context
-      return null;
+    if (request && request.headers) {
+      reqHeaders = request.headers;
+    } else {
+      try {
+        reqHeaders = await headers();
+      } catch {
+        // During static prerendering or outside request context
+        return null;
+      }
     }
 
     const session = await auth.api.getSession({
