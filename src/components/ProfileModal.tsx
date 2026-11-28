@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { User, X, LogOut, Trash2, AlertTriangle, Loader2, BookOpen, Bookmark } from 'lucide-react';
+import Link from 'next/link';
+import { User, X, LogOut, Trash2, AlertTriangle, Loader2, BookOpen, Bookmark, BarChart3, ShieldCheck } from 'lucide-react';
 import { useAuth, AuthUser } from '../context/AuthContext';
+import { isAdmin } from '../lib/admin';
 
 interface ProfileModalProps {
   isOpen: boolean;
@@ -149,9 +151,17 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h3 className="font-bold text-base sm:text-lg truncate">
-                {user.name || 'Scrollbound Reader'}
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="font-bold text-base sm:text-lg truncate">
+                  {user.name || 'Scrollbound Reader'}
+                </h3>
+                {isAdmin(user.email) && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                    <ShieldCheck className="w-3 h-3" />
+                    Admin
+                  </span>
+                )}
+              </div>
               <p className="text-xs sm:text-sm opacity-70 truncate font-mono">
                 {user.email}
               </p>
@@ -185,6 +195,17 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
 
           {/* Account Actions */}
           <div className="space-y-3 pt-2">
+            {isAdmin(user.email) && (
+              <Link
+                href="/admin"
+                onClick={onClose}
+                className="w-full min-h-[44px] px-4 py-2.5 text-sm font-semibold rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white transition flex items-center justify-center gap-2 shadow-sm touch-manipulation cursor-pointer"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Admin Dashboard</span>
+              </Link>
+            )}
+
             {/* Log Out Button */}
             <button
               type="button"

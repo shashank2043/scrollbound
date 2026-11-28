@@ -29,6 +29,10 @@ import { POST as settingsPost } from '../src/app/api/settings/route';
 import { POST as themesPost, DELETE as themesDelete } from '../src/app/api/settings/themes/route';
 import { GET as syncGet, POST as syncPost } from '../src/app/api/sync/route';
 import { GET as profileGet, DELETE as profileDelete } from '../src/app/api/auth/profile/route';
+import { GET as publicBooksGet } from '../src/app/api/books/public/route';
+import { PATCH as publicBookPatch } from '../src/app/api/books/[bookId]/public/route';
+import { GET as adminStatsGet } from '../src/app/api/admin/stats/route';
+import { isAdmin, ADMIN_EMAIL } from '../src/lib/admin';
 
 // Node.js test runner
 let totalTests = 0;
@@ -283,6 +287,45 @@ export async function runBackendUnitTests() {
       method: 'DELETE',
     });
     const res = await profileDelete(req);
+    assertEquals(res.status, 401);
+  });
+
+  // Suite 6: Public Library & Admin Authorization Contracts
+  console.log('\n▶ Suite 6: Public Library & Admin Authorization Contracts');
+  await test('isAdmin correctly validates admin email shashankpulluri1@gmail.com', () => {
+    assertEquals(isAdmin('shashankpulluri1@gmail.com'), true);
+    assertEquals(isAdmin('SHASHANKPULLURI1@GMAIL.COM'), true);
+    assertEquals(isAdmin('  shashankpulluri1@gmail.com  '), true);
+    assertEquals(isAdmin('other@example.com'), false);
+    assertEquals(isAdmin(undefined), false);
+    assertEquals(isAdmin(null), false);
+    assertEquals(isAdmin(''), false);
+    assertEquals(ADMIN_EMAIL, 'shashankpulluri1@gmail.com');
+  });
+
+  await test('GET /api/books/public allows unauthenticated access (returns 200 with public books)', async () => {
+    const req = new Request('http://localhost:3000/api/books/public', { method: 'GET' });
+    const res = await publicBooksGet(req);
+    assertEquals(res.status, 200);
+  });
+
+  await test('PATCH /api/books/[bookId]/public returns 401 Unauthorized without session', async () => {
+    const req = new Request('http://localhost:3000/api/books/test_book_123/public', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPublic: true }),
+    });
+    const res = await publicBookPatch(req, {
+      params: Promise.resolve({ bookId: 'test_book_123' }),
+    });
+    assertEquals(res.status, 401);
+  });
+
+  await test('GET /api/admin/stats returns 401 Unauthorized without session', async () => {
+    const req = new Request('http://localhost:3000/api/admin/stats', {
+      method: 'GET',
+    });
+    const res = await adminStatsGet(req);
     assertEquals(res.status, 401);
   });
 

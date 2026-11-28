@@ -10,6 +10,10 @@ import { DELETE as deleteBookRoute } from '../src/app/api/books/[bookId]/route';
 import { GET as getChunksRoute, POST as postChunksRoute } from '../src/app/api/books/[bookId]/chunks/route';
 import { POST as splitRoute } from '../src/app/api/books/[bookId]/split/route';
 import { GET as getProfileRoute, DELETE as deleteProfileRoute } from '../src/app/api/auth/profile/route';
+import { GET as getPublicBooksRoute } from '../src/app/api/books/public/route';
+import { PATCH as patchPublicBookRoute } from '../src/app/api/books/[bookId]/public/route';
+import { GET as getAdminStatsRoute } from '../src/app/api/admin/stats/route';
+import { POST as postProgressRoute, GET as getProgressRoute } from '../src/app/api/books/[bookId]/progress/route';
 
 describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () => {
   let testUserId: string;
@@ -347,6 +351,108 @@ describe('End-to-End Real Backend Route & Database Upload/Split Pipeline', () =>
     // 10 chapters exist under parent
     const childChapters = data.books.filter((b) => b.parentId === parentBookId);
     assert.strictEqual(childChapters.length, 10);
+  });
+
+  it('enforces admin-only publishing security gates (403 for non-admin users)', async () => {
+    // 1. Non-admin cannot upload directly as public
+    const forbiddenCreateReq = makeRequest('http://localhost:3000/api/books', 'POST', {
+      id: `illegal_public_${Date.now()}`,
+      title: 'Illegal Public Novel',
+      blockCount: 10,
+      chunkCount: 1,
+      isPublic: true,
+      chunks: [],
+    });
+    const forbiddenCreateRes = await createBookRoute(forbiddenCreateReq);
+    assert.strictEqual(
+      forbiddenCreateRes.status,
+      403,
+      'POST /api/books with isPublic: true must return 403 Forbidden for non-admin'
+    );
+
+    // 2. Non-admin cannot toggle isPublic via PATCH /api/books/[bookId]/public
+    const patchReq = makeRequest(
+      `http://localhost:3000/api/books/${parentBookId}/public`,
+      'PATCH',
+      { isPublic: true }
+    );
+    const patchRes = await patchPublicBookRoute(patchReq, {
+      params: Promise.resolve({ bookId: parentBookId }),
+    });
+    assert.strictEqual(
+      patchRes.status,
+      403,
+      'PATCH /api/books/[bookId]/public must return 403 Forbidden for non-admin'
+    );
+
+    // 3. Non-admin cannot access admin stats via GET /api/admin/stats
+    const adminReq = makeRequest('http://localhost:3000/api/admin/stats', 'GET');
+    const adminRes = await getAdminStatsRoute(adminReq);
+    assert.strictEqual(
+      adminRes.status,
+      403,
+      'GET /api/admin/stats must return 403 Forbidden for non-admin'
+    );
+  });
+
+  it('allows public access to published novels and tracks individual reader progress', async () => {
+    // Simulate admin publishing the book and its child chapters by setting isPublic in DB
+    await prisma.book.updateMany({
+      where: {
+        OR: [{ id: parentBookId }, { parentId: parentBookId }],
+      },
+      data: { isPublic: true },
+    });
+
+    // 1. GET /api/books/public returns the parent book
+    const publicReq = new Request('http://localhost:3000/api/books/public', {
+      method: 'GET',
+    });
+    const publicRes = await getPublicBooksRoute(publicReq);
+    assert.strictEqual(publicRes.status, 200, 'GET /api/books/public must return 200');
+    const publicData = (await publicRes.json()) as {
+      books: { id: string; title: string; isPublic: boolean; totalChapters?: number }[];
+    };
+    const foundPublicParent = publicData.books.find((b) => b.id === parentBookId);
+    assert.ok(foundPublicParent, 'Public parent book must be present in public library');
+    assert.strictEqual(foundPublicParent!.isPublic, true);
+
+    // 2. Unauthenticated user can fetch chunks of public novel
+    const unauthChunkReq = new Request(
+      `http://localhost:3000/api/books/${parentBookId}/chunks`,
+      { method: 'GET' }
+    );
+    const unauthChunkRes = await getChunksRoute(unauthChunkReq, {
+      params: Promise.resolve({ bookId: parentBookId }),
+    });
+    assert.strictEqual(
+      unauthChunkRes.status,
+      200,
+      'Unauthenticated reader must be able to read public book chunks'
+    );
+
+    // 3. Authenticated user can save their personal reading progress on the public book
+    const saveProgReq = makeRequest(
+      `http://localhost:3000/api/books/${parentBookId}/progress`,
+      'POST',
+      { blockId: 45, offset: 0, percent: 15 }
+    );
+    const saveProgRes = await postProgressRoute(saveProgReq, {
+      params: Promise.resolve({ bookId: parentBookId }),
+    });
+    assert.strictEqual(saveProgRes.status, 200, 'Saving progress on public book must succeed');
+
+    const getProgReq = makeRequest(
+      `http://localhost:3000/api/books/${parentBookId}/progress`,
+      'GET'
+    );
+    const getProgRes = await getProgressRoute(getProgReq, {
+      params: Promise.resolve({ bookId: parentBookId }),
+    });
+    assert.strictEqual(getProgRes.status, 200);
+    const progData = (await getProgRes.json()) as { progress: { blockId: number; percent: number } };
+    assert.strictEqual(progData.progress.blockId, 45);
+    assert.strictEqual(progData.progress.percent, 15);
   });
 
   it('deletes novel via backend route DELETE /api/books/[bookId] and cascades deletion', async () => {

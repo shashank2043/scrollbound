@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { isAdmin } from '@/lib/admin';
 import { Prisma } from '@prisma/client';
 
 export async function GET(request?: Request) {
@@ -57,6 +58,7 @@ export async function GET(request?: Request) {
         totalChapters: b.totalChapters,
         nextBookId: b.nextBookId,
         prevBookId: b.prevBookId,
+        isPublic: b.isPublic,
       };
     });
 
@@ -87,7 +89,16 @@ export async function POST(request: Request) {
       totalChapters,
       nextBookId,
       prevBookId,
+      isPublic,
     } = body;
+
+    // Only designated admin (shashankpulluri1@gmail.com) can publish to Public Library
+    if (isPublic && !isAdmin(user.email)) {
+      return NextResponse.json(
+        { error: 'Forbidden: Only the admin (shashankpulluri1@gmail.com) can upload books to the public library.' },
+        { status: 403 }
+      );
+    }
 
     if (!id || !title || !Array.isArray(chunks)) {
       return NextResponse.json({ error: 'Invalid book payload.' }, { status: 400 });
@@ -108,6 +119,7 @@ export async function POST(request: Request) {
           totalChapters: typeof totalChapters === 'number' ? totalChapters : null,
           nextBookId: nextBookId || null,
           prevBookId: prevBookId || null,
+          isPublic: Boolean(isPublic),
         },
       });
 
@@ -142,6 +154,7 @@ export async function POST(request: Request) {
         totalChapters: book.totalChapters,
         nextBookId: book.nextBookId,
         prevBookId: book.prevBookId,
+        isPublic: book.isPublic,
       },
       success: true,
     });

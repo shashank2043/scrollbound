@@ -8,11 +8,7 @@ interface RouteContext {
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const user = await getCurrentUser(request);
     const { bookId, index: indexStr } = await context.params;
     const index = parseInt(indexStr, 10);
 
@@ -20,11 +16,20 @@ export async function GET(request: Request, context: RouteContext) {
       where: {
         bookId,
         index,
-        book: { userId: user.id },
+        book: user
+          ? {
+              OR: [{ userId: user.id }, { isPublic: true }],
+            }
+          : {
+              isPublic: true,
+            },
       },
     });
 
     if (!chunk) {
+      if (!user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
       return NextResponse.json({ chunk: null }, { status: 404 });
     }
 

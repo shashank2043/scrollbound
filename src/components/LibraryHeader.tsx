@@ -1,45 +1,125 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Scroll, LogOut, HardDrive, Settings, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { Scroll, LogOut, HardDrive, Settings, Plus, BookOpen, Globe, BarChart3 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../lib/admin';
 import { ProfileModal } from './ProfileModal';
 
 interface LibraryHeaderProps {
   onAddBook: () => void;
   onOpenSettings: () => void;
   onOpenBackup: () => void;
+  activeTab?: 'personal' | 'public';
+  onTabChange?: (tab: 'personal' | 'public') => void;
+  publicCount?: number;
+  personalCount?: number;
 }
 
 export function LibraryHeader({
   onAddBook,
   onOpenSettings,
   onOpenBackup,
+  activeTab = 'personal',
+  onTabChange,
+  publicCount,
+  personalCount,
 }: LibraryHeaderProps) {
   const { user, openAuthModal, logout } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const userIsAdmin = isAdmin(user?.email);
 
   return (
     <>
-      <header className="border-b border-black/10 dark:border-white/10 px-3 sm:px-8 py-3 sm:py-5 transition-colors w-full max-w-full overflow-x-hidden">
+      <header className="border-b border-black/10 dark:border-white/10 px-3 sm:px-8 py-3 sm:py-4 transition-colors w-full max-w-full overflow-x-hidden">
         <div className="max-w-6xl mx-auto flex items-center justify-between gap-1.5 sm:gap-4 w-full min-w-0">
           {/* Brand Logo & Name */}
-          <div className="flex items-center gap-1.5 sm:gap-3 min-w-0 shrink">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-sm border border-black/10 dark:border-white/10 shrink-0 text-blue-600 dark:text-blue-400">
-              <Scroll className="w-4 h-4 sm:w-5 sm:h-5" />
-            </div>
-            <div className="min-w-0">
-              <h1 className="text-sm sm:text-2xl font-bold tracking-tight font-serif truncate">
-                Scrollbound
-              </h1>
-              <p className="text-[11px] opacity-60 font-sans hidden md:block truncate">
-                PostgreSQL-backed personal novel reader
-              </p>
-            </div>
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 shrink-0">
+            <Link href="/" className="flex items-center gap-2 sm:gap-3 group">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-sm border border-black/10 dark:border-white/10 shrink-0 text-blue-600 dark:text-blue-400 group-hover:scale-105 transition">
+                <Scroll className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <div className="min-w-0">
+                <h1 className="text-sm sm:text-2xl font-bold tracking-tight font-serif truncate">
+                  Scrollbound
+                </h1>
+                <p className="text-[11px] opacity-60 font-sans hidden md:block truncate">
+                  PostgreSQL-backed personal novel reader
+                </p>
+              </div>
+            </Link>
           </div>
+
+          {/* Library Tabs (Personal vs Public) */}
+          {onTabChange && (
+            <div className="flex items-center p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => onTabChange('personal')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition touch-manipulation cursor-pointer ${
+                  activeTab === 'personal'
+                    ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                    : 'opacity-70 hover:opacity-100'
+                }`}
+                aria-label="My Library"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>My Library</span>
+                {personalCount !== undefined && (
+                  <span
+                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] ${
+                      activeTab === 'personal'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-black/10 dark:bg-white/10'
+                    }`}
+                  >
+                    {personalCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => onTabChange('public')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg transition touch-manipulation cursor-pointer ${
+                  activeTab === 'public'
+                    ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                    : 'opacity-70 hover:opacity-100'
+                }`}
+                aria-label="Public Library"
+              >
+                <Globe className="w-3.5 h-3.5" />
+                <span>Public Library</span>
+                {publicCount !== undefined && (
+                  <span
+                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] ${
+                      activeTab === 'public'
+                        ? 'bg-white/20 text-white'
+                        : 'bg-black/10 dark:bg-white/10'
+                    }`}
+                  >
+                    {publicCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
 
           {/* Action Controls */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* Admin Dashboard Link (Visible only to shashankpulluri1@gmail.com) */}
+            {userIsAdmin && (
+              <Link
+                href="/admin"
+                className="p-1.5 sm:px-2.5 sm:py-1.5 text-xs font-semibold rounded-lg sm:rounded-xl border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 active:scale-95 transition flex items-center gap-1.5"
+                title="Admin Dashboard (User & Usage Analytics)"
+                aria-label="Admin Dashboard"
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Admin</span>
+              </Link>
+            )}
+
             {/* User Account / Auth buttons */}
             {user ? (
               <div className="flex items-center gap-1 sm:gap-2 border-r border-black/10 dark:border-white/10 pr-1 sm:pr-2.5">
@@ -136,11 +216,13 @@ export function LibraryHeader({
               onClick={onAddBook}
               className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-xs sm:text-sm font-semibold rounded-lg sm:rounded-xl text-white transition shadow-sm hover:shadow active:scale-95 flex items-center gap-1 sm:gap-1.5 shrink-0"
               style={{ backgroundColor: 'var(--sb-accent, #2563eb)' }}
-              title="Add a new PDF novel"
+              title={activeTab === 'public' && userIsAdmin ? 'Add Book to Public Library' : 'Add a new PDF novel'}
               aria-label="Add a new PDF novel"
             >
               <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Add Book</span>
+              <span className="hidden sm:inline">
+                {activeTab === 'public' && userIsAdmin ? 'Add Public Book' : 'Add Book'}
+              </span>
             </button>
           </div>
         </div>

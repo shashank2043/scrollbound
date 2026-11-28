@@ -113,6 +113,7 @@ export async function POST(request: Request, context: RouteContext) {
           prevBookId: ch.prevBookId || null,
           blockCount: ch.blockCount || 0,
           chunkCount: ch.chunkCount || (ch.chunks?.length ?? 0),
+          isPublic: parentBook.isPublic,
         }));
 
         await tx.book.createMany({

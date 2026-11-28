@@ -8,7 +8,7 @@ interface RouteContext {
 
 export async function GET(request: Request, context: RouteContext) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -38,12 +38,24 @@ export async function GET(request: Request, context: RouteContext) {
 
 export async function POST(request: Request, context: RouteContext) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { bookId } = await context.params;
+
+    const targetBook = await prisma.book.findFirst({
+      where: {
+        id: bookId,
+        OR: [{ userId: user.id }, { isPublic: true }],
+      },
+    });
+
+    if (!targetBook) {
+      return NextResponse.json({ error: 'Book not found' }, { status: 404 });
+    }
+
     const body = await request.json();
     const { id, blockId, snippet, note } = body;
 

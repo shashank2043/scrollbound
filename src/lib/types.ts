@@ -8,6 +8,7 @@ export interface Block {
 
 export interface Book {
   id: string;
+  userId?: string;
   title: string;
   createdAt: number;
   updatedAt: number;
@@ -20,6 +21,9 @@ export interface Book {
   totalChapters?: number | null;
   nextBookId?: string | null;
   prevBookId?: string | null;
+  isPublic?: boolean;
+  uploaderEmail?: string;
+  uploaderName?: string;
 }
 
 export interface Chunk {
@@ -75,4 +79,48 @@ export interface ExportData {
   bookmarks: Bookmark[];
   themes: CustomTheme[];
   settings?: ReaderSettings;
+}
+
+export interface AdminUserStats {
+  id: string;
+  name: string | null;
+  email: string;
+  createdAt: string;
+  bookCount: number;
+  readingCount: number;
+  bookmarkCount: number;
+  lastActive: string | null;
+}
+
+export interface AdminPublicBookStats {
+  id: string;
+  title: string;
+  createdAt: string;
+  blockCount: number;
+  totalChapters: number | null;
+  readersCount: number;
+  avgProgress: number;
+  bookmarksCount: number;
+}
+
+export interface AdminRecentActivity {
+  id: string;
+  userName: string;
+  userEmail: string;
+  bookTitle: string;
+  bookId: string;
+  percent: number;
+  updatedAt: string;
+}
+
+export interface AdminDashboardData {
+  totalUsers: number;
+  totalBooks: number;
+  totalPublicBooks: number;
+  totalPrivateBooks: number;
+  totalBookmarks: number;
+  totalReadingSessions: number;
+  users: AdminUserStats[];
+  publicBooks: AdminPublicBookStats[];
+  recentActivity: AdminRecentActivity[];
 }

@@ -150,6 +150,7 @@ async function saveBookCore(book: Book, chunks: Chunk[]): Promise<void> {
       totalChapters: book.totalChapters,
       nextBookId: book.nextBookId,
       prevBookId: book.prevBookId,
+      isPublic: Boolean(book.isPublic),
     }),
   });
 
@@ -180,7 +181,8 @@ export interface ChapterInput {
  */
 export async function saveChapteredNovel(
   novelTitle: string,
-  chapterInputs: ChapterInput[]
+  chapterInputs: ChapterInput[],
+  isPublic = false
 ): Promise<{ parent: Book; chapters: Book[] }> {
   const parentId = 'novel_' + Date.now() + '_' + Math.random().toString(36).substring(2, 8);
   const totalBlocks = chapterInputs.reduce((sum, ch) => sum + ch.blocks.length, 0);
@@ -210,6 +212,7 @@ export async function saveChapteredNovel(
       totalChapters: chapterInputs.length,
       prevBookId: idx > 0 ? chapterIds[idx - 1] : null,
       nextBookId: idx < chapterInputs.length - 1 ? chapterIds[idx + 1] : null,
+      isPublic,
     };
 
     chapters.push({ book: chapterBook, chunks });
@@ -223,6 +226,7 @@ export async function saveChapteredNovel(
     blockCount: totalBlocks,
     chunkCount: 0,
     totalChapters: chapterInputs.length,
+    isPublic,
   };
 
   // 1. Save parent book container
@@ -700,6 +704,65 @@ export async function getAllProgress(): Promise<Record<string, Progress>> {
   } catch {}
 
   return cached;
+}
+
+/**
+ * Fetch all public library novels and current user's reading progress on them
+ */
+export async function getPublicBooks(): Promise<{
+  books: Book[];
+  progressMap: Record<string, Progress>;
+}> {
+  try {
+    const res = await fetch('/api/books/public');
+    if (res.ok) {
+      const data = await res.json();
+      return {
+        books: Array.isArray(data.books) ? data.books : [],
+        progressMap: data.progressMap || {},
+      };
+    }
+  } catch (err) {
+    console.error('Failed to load public library books:', err);
+  }
+
+  return { books: [], progressMap: {} };
+}
+
+/**
+ * Toggle public status for a book (Admin only: shashankpulluri1@gmail.com)
+ */
+export async function toggleBookPublic(
+  bookId: string,
+  isPublic: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const res = await fetch(`/api/books/${bookId}/public`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ isPublic }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return {
+        success: false,
+        error: data.error || 'Failed to update book public status',
+      };
+    }
+
+    // Update in local cache if present
+    const cached = getCachedBooks();
+    const updated = cached.map((b) =>
+      b.id === bookId || b.parentId === bookId ? { ...b, isPublic } : b
+    );
+    setCachedBooks(updated);
+
+    return { success: true };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { success: false, error: msg };
+  }
 }
 
 // ----------------------------------------------------------------------

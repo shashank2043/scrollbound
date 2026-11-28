@@ -2,8 +2,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { BookOpen, MoreVertical, FilePlus, Split, Trash2 } from 'lucide-react';
+import { BookOpen, MoreVertical, FilePlus, Split, Trash2, Globe, Lock } from 'lucide-react';
 import { Book, Progress } from '../lib/types';
+import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../lib/admin';
 
 interface BookCardProps {
   book: Book;
@@ -15,9 +17,11 @@ interface BookCardProps {
     currentChapterIndex: number;
     totalChapters: number;
   };
-  onAppend: (book: Book) => void;
-  onDelete: (book: Book) => void;
+  onAppend?: (book: Book) => void;
+  onDelete?: (book: Book) => void;
   onSplit?: (book: Book) => void;
+  onTogglePublic?: (book: Book) => void;
+  isReadOnly?: boolean;
 }
 
 export function BookCard({
@@ -27,7 +31,11 @@ export function BookCard({
   onAppend,
   onDelete,
   onSplit,
+  onTogglePublic,
+  isReadOnly = false,
 }: BookCardProps) {
+  const { user } = useAuth();
+  const userIsAdmin = isAdmin(user?.email);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -78,60 +86,105 @@ export function BookCard({
       <div>
         {/* Top bar with menu */}
         <div className="flex items-start justify-between gap-2 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-            <BookOpen className="w-4 h-4" />
-          </div>
-          <div className="relative" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen(!menuOpen)}
-              className="p-1.5 rounded-lg opacity-60 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition"
-              aria-label="Book actions menu"
-            >
-              <MoreVertical className="w-4 h-4" />
-            </button>
-
-            {menuOpen && (
-              <div
-                className="absolute right-0 top-full mt-1 w-56 rounded-xl shadow-xl z-20 py-1.5 border animate-fade-in text-sm font-sans"
-                style={{
-                  backgroundColor: 'var(--sb-bg)',
-                  borderColor: 'rgba(128, 128, 128, 0.25)',
-                }}
-              >
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onAppend(book);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2.5"
-                >
-                  <FilePlus className="w-4 h-4 text-blue-500" />
-                  <span>Add another PDF to this book</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onSplit?.(book);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2.5"
-                >
-                  <Split className="w-4 h-4 text-purple-500" />
-                  <span>{isChaptered ? 'Re-split Chapters' : 'Split into Chapters'}</span>
-                </button>
-                <div className="my-1 border-t border-black/5 dark:border-white/5" />
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onDelete(book);
-                  }}
-                  className="w-full text-left px-3.5 py-2 hover:bg-red-500/10 text-red-600 dark:text-red-400 transition flex items-center gap-2.5"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  <span>Delete book</span>
-                </button>
-              </div>
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <BookOpen className="w-4 h-4" />
+            </div>
+            {book.isPublic && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                <Globe className="w-3 h-3" />
+                <span>Public</span>
+              </span>
             )}
           </div>
+
+          {/* Action Menu (Only available for owner or admin) */}
+          {(!isReadOnly || userIsAdmin) && (
+            <div className="relative" ref={menuRef}>
+              <button
+                onClick={() => setMenuOpen(!menuOpen)}
+                className="p-1.5 rounded-lg opacity-60 hover:opacity-100 hover:bg-black/5 dark:hover:bg-white/10 transition"
+                aria-label="Book actions menu"
+              >
+                <MoreVertical className="w-4 h-4" />
+              </button>
+
+              {menuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 w-56 rounded-xl shadow-xl z-20 py-1.5 border animate-fade-in text-sm font-sans"
+                  style={{
+                    backgroundColor: 'var(--sb-bg)',
+                    borderColor: 'rgba(128, 128, 128, 0.25)',
+                  }}
+                >
+                  {/* Admin Public Toggle */}
+                  {userIsAdmin && onTogglePublic && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onTogglePublic(book);
+                      }}
+                      className="w-full text-left px-3.5 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2.5 text-xs font-medium"
+                    >
+                      {book.isPublic ? (
+                        <>
+                          <Lock className="w-4 h-4 text-amber-500" />
+                          <span>Make Private (Remove from Public)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Globe className="w-4 h-4 text-emerald-500" />
+                          <span>Publish to Public Library</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {!isReadOnly && onAppend && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onAppend(book);
+                      }}
+                      className="w-full text-left px-3.5 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2.5 text-xs font-medium"
+                    >
+                      <FilePlus className="w-4 h-4 text-blue-500" />
+                      <span>Add another PDF to this book</span>
+                    </button>
+                  )}
+
+                  {!isReadOnly && onSplit && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onSplit(book);
+                      }}
+                      className="w-full text-left px-3.5 py-2 hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center gap-2.5 text-xs font-medium"
+                    >
+                      <Split className="w-4 h-4 text-purple-500" />
+                      <span>{isChaptered ? 'Re-split Chapters' : 'Split into Chapters'}</span>
+                    </button>
+                  )}
+
+                  {!isReadOnly && onDelete && (
+                    <>
+                      <div className="my-1 border-t border-black/5 dark:border-white/5" />
+                      <button
+                        onClick={() => {
+                          setMenuOpen(false);
+                          onDelete(book);
+                        }}
+                        className="w-full text-left px-3.5 py-2 hover:bg-red-500/10 text-red-600 dark:text-red-400 transition flex items-center gap-2.5 text-xs font-medium"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Delete book</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Title */}

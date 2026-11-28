@@ -1,10 +1,12 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
-import { X, FileText, BookOpen } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, FileText, BookOpen, Globe } from 'lucide-react';
 import { extractPdfBlocks, ExtractProgress } from '../lib/pdf/extract';
 import { saveBook, saveChapteredNovel, createChunksFromBlocks } from '../lib/db';
 import { Book, Block } from '../lib/types';
+import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../lib/admin';
 import { CircularProgress } from './CircularProgress';
 import {
   ChapterSuggestion,
@@ -17,12 +19,25 @@ interface AddBookModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBookAdded: (newBook: Book) => void;
+  defaultPublic?: boolean;
 }
 
-export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps) {
+export function AddBookModal({
+  isOpen,
+  onClose,
+  onBookAdded,
+  defaultPublic = false,
+}: AddBookModalProps) {
+  const { user } = useAuth();
+  const userIsAdmin = isAdmin(user?.email);
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
+  const [isPublishPublic, setIsPublishPublic] = useState(defaultPublic);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    setIsPublishPublic(defaultPublic);
+  }, [defaultPublic, isOpen]);
   const [savingMessage, setSavingMessage] = useState<string | null>(null);
   const [progress, setProgress] = useState<ExtractProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +111,7 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
         updatedAt: Date.now(),
         blockCount: extractedBlocks.length,
         chunkCount: chunks.length,
+        isPublic: userIsAdmin && isPublishPublic,
       };
 
       await saveBook(newBook, chunks);
@@ -123,7 +139,11 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
         blocks: s.blocks,
       }));
 
-      const { parent } = await saveChapteredNovel(title.trim(), chapterInputs);
+      const { parent } = await saveChapteredNovel(
+        title.trim(),
+        chapterInputs,
+        userIsAdmin && isPublishPublic
+      );
       onBookAdded(parent);
       onClose();
     } catch (err: unknown) {
@@ -251,17 +271,38 @@ export function AddBookModal({ isOpen, onClose, onBookAdded }: AddBookModalProps
 
               {/* Title Input */}
               {file && (
-                <div>
-                  <label className="block text-sm font-medium mb-1.5 opacity-80">
-                    Book Title
-                  </label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="e.g. War and Peace"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1.5 opacity-80">
+                      Book Title
+                    </label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="e.g. War and Peace"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 dark:border-gray-700 bg-transparent text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+                    />
+                  </div>
+
+                  {/* Public Library Toggle (Visible to Admin: shashankpulluri1@gmail.com) */}
+                  {userIsAdmin && (
+                    <div className="p-3.5 rounded-xl border border-blue-500/30 bg-blue-500/5 space-y-1.5">
+                      <label className="flex items-center gap-2.5 cursor-pointer font-semibold text-xs text-blue-600 dark:text-blue-400">
+                        <input
+                          type="checkbox"
+                          checked={isPublishPublic}
+                          onChange={(e) => setIsPublishPublic(e.target.checked)}
+                          className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                        />
+                        <Globe className="w-4 h-4" />
+                        <span>Publish to Public Library (All users can read)</span>
+                      </label>
+                      <p className="text-[11px] opacity-70 pl-6 leading-relaxed">
+                        As the curator (shashankpulluri1@gmail.com), publishing makes this book visible to every reader in the Public Library. Each user tracks their own independent progress.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </>

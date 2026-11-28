@@ -93,6 +93,8 @@ model Book {
   nextBookId    String?
   prevBookId    String?
 
+  isPublic      Boolean    @default(false)
+
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   parent     Book?      @relation("BookChapters", fields: [parentId], references: [id], onDelete: Cascade)
   chapters   Book[]     @relation("BookChapters")
@@ -102,6 +104,7 @@ model Book {
 
   @@index([userId])
   @@index([parentId])
+  @@index([isPublic])
   @@map("books")
 }
 
